@@ -1,0 +1,293 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Prevent horizontal scrolling on mobile */
+html, body {
+  margin: 0;
+  padding: 0;
+  overflow-x: hidden;
+  width: 100%;
+  touch-action: manipulation;
+}
+
+/* iOS-only helper to disable pointer events on decorative layers */
+@supports (-webkit-touch-callout: none) {
+  .ios-pointer-none {
+    pointer-events: none !important;
+  }
+}
+
+/* Performance optimizations */
+@layer utilities {
+  .will-change-transform {
+    will-change: transform;
+  }
+  
+  .will-change-opacity {
+    will-change: opacity;
+  }
+  
+  .gpu-accelerated {
+    transform: translateZ(0);
+    backface-visibility: hidden;
+    perspective: 1000;
+  }
+  
+  .text-glow {
+    text-shadow: 0 0 20px rgba(255, 255, 255, 0.5);
+  }
+  
+  .tech-border {
+    background: linear-gradient(45deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+  }
+}
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 0 0% 3.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 3.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 3.9%;
+    --primary: 0 0% 9%;
+    --primary-foreground: 0 0% 98%;
+    --secondary: 0 0% 96.1%;
+    --secondary-foreground: 0 0% 9%;
+    --muted: 0 0% 96.1%;
+    --muted-foreground: 0 0% 45.1%;
+    --accent: 0 0% 96.1%;
+    --accent-foreground: 0 0% 9%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 0 0% 89.8%;
+    --input: 0 0% 89.8%;
+    --ring: 0 0% 3.9%;
+    --radius: 0.5rem;
+  }
+
+  .dark {
+    --background: 0 0% 3.9%;
+    --foreground: 0 0% 98%;
+    --card: 0 0% 3.9%;
+    --card-foreground: 0 0% 98%;
+    --popover: 0 0% 3.9%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 0 0% 98%;
+    --primary-foreground: 0 0% 9%;
+    --secondary: 0 0% 14.9%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 0 0% 14.9%;
+    --muted-foreground: 0 0% 63.9%;
+    --accent: 0 0% 14.9%;
+    --accent-foreground: 0 0% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 0 0% 14.9%;
+    --input: 0 0% 14.9%;
+    --ring: 0 0% 83.1%;
+  }
+}
+
+@layer base {
+  * {
+    border-color: hsl(var(--border));
+  }
+  body {
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+}
+
+/* Custom animations for the AI landing page */
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-20px);
+  }
+}
+
+@keyframes pulse-green {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+  }
+  70% {
+    box-shadow: 0 0 0 10px rgba(16, 185, 129, 0);
+  }
+}
+
+@keyframes gradient-shift {
+  0%, 100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+@keyframes gradient {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+@keyframes shiny-text {
+  0%, 90%, 100% {
+    background-position: calc(-100% - var(--shiny-width, 100px)) 0;
+  }
+  30%, 60% {
+    background-position: calc(100% + var(--shiny-width, 100px)) 0;
+  }
+}
+
+.animate-float {
+  animation: float 6s ease-in-out infinite;
+}
+
+.animate-pulse-green {
+  animation: pulse-green 2s infinite;
+}
+
+.animate-gradient {
+  animation: gradient-shift 3s ease infinite;
+  background-size: 200% 200%;
+}
+
+.animate-gradient-x {
+  animation: gradient 8s linear infinite;
+  background-size: 300% 300%;
+}
+
+.animate-shiny-text {
+  animation: shiny-text 8s infinite;
+}
+
+/* Font Inter */
+.font-inter {
+  font-family: 'Inter', sans-serif;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #1f2937;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #10b981;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #059669;
+}
+
+/* Custom utility classes for v3 compatibility */
+@layer utilities {
+  .bg-opacity-5 {
+    background-color: rgb(0 0 0 / 0.05);
+  }
+  
+  .bg-opacity-10 {
+    background-color: rgb(0 0 0 / 0.1);
+  }
+  
+  .bg-opacity-20 {
+    background-color: rgb(0 0 0 / 0.2);
+  }
+  
+  .bg-opacity-30 {
+    background-color: rgb(0 0 0 / 0.3);
+  }
+  
+  .bg-opacity-40 {
+    background-color: rgb(0 0 0 / 0.4);
+  }
+  
+  .bg-opacity-50 {
+    background-color: rgb(0 0 0 / 0.5);
+  }
+  
+  .bg-opacity-60 {
+    background-color: rgb(0 0 0 / 0.6);
+  }
+  
+  .bg-opacity-80 {
+    background-color: rgb(0 0 0 / 0.8);
+  }
+  
+  .border-opacity-10 {
+    border-color: rgb(0 0 0 / 0.1);
+  }
+  
+  .border-opacity-20 {
+    border-color: rgb(0 0 0 / 0.2);
+  }
+  
+  .border-opacity-30 {
+    border-color: rgb(0 0 0 / 0.3);
+  }
+  
+  .border-opacity-40 {
+    border-color: rgb(0 0 0 / 0.4);
+  }
+  
+  .border-opacity-50 {
+    border-color: rgb(0 0 0 / 0.5);
+  }
+  
+  .from-opacity-5 {
+    --tw-gradient-from: rgb(0 0 0 / 0.05);
+    --tw-gradient-to: rgb(0 0 0 / 0);
+    --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to);
+  }
+  
+  .from-opacity-10 {
+    --tw-gradient-from: rgb(0 0 0 / 0.1);
+    --tw-gradient-to: rgb(0 0 0 / 0);
+    --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to);
+  }
+  
+  .from-opacity-20 {
+    --tw-gradient-from: rgb(0 0 0 / 0.2);
+    --tw-gradient-to: rgb(0 0 0 / 0);
+    --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to);
+  }
+  
+  .from-opacity-30 {
+    --tw-gradient-from: rgb(0 0 0 / 0.3);
+    --tw-gradient-to: rgb(0 0 0 / 0);
+    --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to);
+  }
+  
+  .to-opacity-20 {
+    --tw-gradient-to: rgb(0 0 0 / 0.2);
+  }
+  
+  .to-opacity-30 {
+    --tw-gradient-to: rgb(0 0 0 / 0.3);
+  }
+  
+  .via-opacity-10 {
+    --tw-gradient-to: rgb(0 0 0 / 0);
+    --tw-gradient-stops: var(--tw-gradient-from), rgb(0 0 0 / 0.1), var(--tw-gradient-to);
+  }
+  
+  .via-opacity-30 {
+    --tw-gradient-to: rgb(0 0 0 / 0);
+    --tw-gradient-stops: var(--tw-gradient-from), rgb(0 0 0 / 0.3), var(--tw-gradient-to);
+  }
+}

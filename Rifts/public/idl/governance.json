@@ -1,0 +1,2191 @@
+{
+  "address": "EbVBCs4g7MQo7iDAtVcZhmV9FMq37JKah3iheLpqJbPo",
+  "metadata": {
+    "name": "governance",
+    "version": "0.1.0",
+    "spec": "0.1.0",
+    "description": "RIFTS Governance Program"
+  },
+  "instructions": [
+    {
+      "name": "add_multisig_authority",
+      "docs": [
+        "**MULTISIG GOVERNANCE**: Add a new authority to the multisig"
+      ],
+      "discriminator": [
+        144,
+        2,
+        81,
+        223,
+        51,
+        241,
+        49,
+        105
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "governance",
+          "writable": true
+        }
+      ],
+      "args": [
+        {
+          "name": "new_authority",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
+      "name": "add_multisig_signature",
+      "docs": [
+        "**MULTISIG GOVERNANCE**: Add signature to multisig proposal"
+      ],
+      "discriminator": [
+        244,
+        112,
+        137,
+        24,
+        150,
+        148,
+        194,
+        171
+      ],
+      "accounts": [
+        {
+          "name": "signer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "multisig_signature_state",
+          "writable": true
+        },
+        {
+          "name": "governance"
+        },
+        {
+          "name": "proposal"
+        }
+      ],
+      "args": [
+        {
+          "name": "proposal_id",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "cancel_proposal",
+      "docs": [
+        "Cancel a proposal (only by proposer or governance authority)"
+      ],
+      "discriminator": [
+        106,
+        74,
+        128,
+        146,
+        19,
+        65,
+        39,
+        23
+      ],
+      "accounts": [
+        {
+          "name": "canceller",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "governance"
+        },
+        {
+          "name": "proposal",
+          "writable": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "cast_vote",
+      "docs": [
+        "Cast a vote on a proposal"
+      ],
+      "discriminator": [
+        20,
+        212,
+        15,
+        189,
+        69,
+        180,
+        69,
+        151
+      ],
+      "accounts": [
+        {
+          "name": "voter",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "proposal",
+          "writable": true
+        },
+        {
+          "name": "vote_record",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  111,
+                  116,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "proposal"
+              },
+              {
+                "kind": "account",
+                "path": "voter"
+              }
+            ]
+          }
+        },
+        {
+          "name": "voter_rifts_account"
+        },
+        {
+          "name": "vote_snapshot",
+          "docs": [
+            "**CRITICAL FIX**: Vote snapshot for flash loan protection"
+          ]
+        },
+        {
+          "name": "governance"
+        },
+        {
+          "name": "rifts_mint",
+          "docs": [
+            "**CRITICAL FIX**: RIFTS mint for decimal validation"
+          ]
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "vote",
+          "type": {
+            "defined": {
+              "name": "VoteChoice"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "create_proposal",
+      "docs": [
+        "Create a new governance proposal"
+      ],
+      "discriminator": [
+        132,
+        116,
+        68,
+        174,
+        216,
+        160,
+        198,
+        22
+      ],
+      "accounts": [
+        {
+          "name": "proposer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "governance",
+          "writable": true
+        },
+        {
+          "name": "proposal",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  112,
+                  111,
+                  115,
+                  97,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "governance"
+              },
+              {
+                "kind": "account",
+                "path": "governance.total_proposals",
+                "account": "Governance"
+              }
+            ]
+          }
+        },
+        {
+          "name": "proposer_rifts_account"
+        },
+        {
+          "name": "rifts_mint",
+          "docs": [
+            "**CRITICAL FIX**: RIFTS mint for decimal validation"
+          ]
+        },
+        {
+          "name": "proposer_vote_snapshot",
+          "docs": [
+            "**AUTO-SNAPSHOT FIX**: Automatically create vote snapshot for proposer"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  111,
+                  116,
+                  101,
+                  95,
+                  115,
+                  110,
+                  97,
+                  112,
+                  115,
+                  104,
+                  111,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "proposal"
+              },
+              {
+                "kind": "account",
+                "path": "proposer"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "title",
+          "type": "string"
+        },
+        {
+          "name": "description",
+          "type": "string"
+        },
+        {
+          "name": "proposal_type",
+          "type": {
+            "defined": {
+              "name": "ProposalType"
+            }
+          }
+        },
+        {
+          "name": "execution_data",
+          "type": "bytes"
+        }
+      ]
+    },
+    {
+      "name": "create_vote_snapshot",
+      "docs": [
+        "Create vote snapshot for a voter when proposal is created"
+      ],
+      "discriminator": [
+        8,
+        149,
+        143,
+        154,
+        174,
+        2,
+        165,
+        246
+      ],
+      "accounts": [
+        {
+          "name": "voter",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "vote_snapshot",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  111,
+                  116,
+                  101,
+                  95,
+                  115,
+                  110,
+                  97,
+                  112,
+                  115,
+                  104,
+                  111,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "proposal"
+              },
+              {
+                "kind": "account",
+                "path": "voter"
+              }
+            ]
+          }
+        },
+        {
+          "name": "proposal"
+        },
+        {
+          "name": "voter_rifts_account"
+        },
+        {
+          "name": "governance"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "proposal_id",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "execute_proposal",
+      "docs": [
+        "Execute a passed proposal"
+      ],
+      "discriminator": [
+        186,
+        60,
+        116,
+        133,
+        108,
+        128,
+        111,
+        28
+      ],
+      "accounts": [
+        {
+          "name": "executor",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "governance",
+          "writable": true
+        },
+        {
+          "name": "proposal",
+          "writable": true
+        },
+        {
+          "name": "multisig_signature_state",
+          "docs": [
+            "**MULTISIG SECURITY**: Signature collection state for multisig proposals",
+            "Optional - only required for multisig proposals"
+          ],
+          "optional": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "initialize_governance",
+      "docs": [
+        "Initialize governance system"
+      ],
+      "discriminator": [
+        171,
+        87,
+        101,
+        237,
+        27,
+        107,
+        201,
+        57
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "governance",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  111,
+                  118,
+                  101,
+                  114,
+                  110,
+                  97,
+                  110,
+                  99,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "authority"
+              }
+            ]
+          }
+        },
+        {
+          "name": "rifts_mint",
+          "docs": [
+            "**CRITICAL FIX**: RIFTS mint for decimal validation"
+          ]
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "rifts_mint",
+          "type": "pubkey"
+        },
+        {
+          "name": "min_voting_period",
+          "type": "i64"
+        },
+        {
+          "name": "min_execution_delay",
+          "type": "i64"
+        }
+      ]
+    },
+    {
+      "name": "initialize_multisig_proposal",
+      "docs": [
+        "**MULTISIG GOVERNANCE**: Initialize multisig signature collection for proposal"
+      ],
+      "discriminator": [
+        122,
+        50,
+        28,
+        179,
+        76,
+        115,
+        20,
+        97
+      ],
+      "accounts": [
+        {
+          "name": "proposer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "multisig_signature_state",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  117,
+                  108,
+                  116,
+                  105,
+                  115,
+                  105,
+                  103
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "proposal"
+              }
+            ]
+          }
+        },
+        {
+          "name": "proposal"
+        },
+        {
+          "name": "governance"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "proposal_id",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "remove_multisig_authority",
+      "docs": [
+        "**MULTISIG GOVERNANCE**: Remove an authority from the multisig"
+      ],
+      "discriminator": [
+        147,
+        65,
+        236,
+        209,
+        112,
+        252,
+        133,
+        98
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "governance",
+          "writable": true
+        }
+      ],
+      "args": [
+        {
+          "name": "authority_to_remove",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
+      "name": "update_signature_threshold",
+      "docs": [
+        "**MULTISIG GOVERNANCE**: Change the required signature threshold"
+      ],
+      "discriminator": [
+        138,
+        35,
+        178,
+        179,
+        45,
+        180,
+        176,
+        240
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "governance",
+          "writable": true
+        }
+      ],
+      "args": [
+        {
+          "name": "new_threshold",
+          "type": "u8"
+        }
+      ]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "Governance",
+      "discriminator": [
+        18,
+        143,
+        88,
+        13,
+        73,
+        217,
+        47,
+        49
+      ]
+    },
+    {
+      "name": "MultisigSignatureState",
+      "discriminator": [
+        147,
+        203,
+        48,
+        81,
+        188,
+        59,
+        128,
+        127
+      ]
+    },
+    {
+      "name": "Proposal",
+      "discriminator": [
+        26,
+        94,
+        189,
+        187,
+        116,
+        136,
+        53,
+        33
+      ]
+    },
+    {
+      "name": "VoteRecord",
+      "discriminator": [
+        112,
+        9,
+        123,
+        165,
+        234,
+        9,
+        157,
+        167
+      ]
+    },
+    {
+      "name": "VoteSnapshot",
+      "discriminator": [
+        206,
+        134,
+        226,
+        253,
+        183,
+        213,
+        27,
+        114
+      ]
+    }
+  ],
+  "events": [
+    {
+      "name": "AuthorityChanged",
+      "discriminator": [
+        31,
+        19,
+        174,
+        152,
+        4,
+        82,
+        215,
+        226
+      ]
+    },
+    {
+      "name": "EmergencyActionExecuted",
+      "discriminator": [
+        181,
+        28,
+        125,
+        11,
+        122,
+        156,
+        76,
+        87
+      ]
+    },
+    {
+      "name": "GovernanceInitialized",
+      "discriminator": [
+        41,
+        187,
+        103,
+        26,
+        42,
+        44,
+        30,
+        15
+      ]
+    },
+    {
+      "name": "MultisigAuthorityAdded",
+      "discriminator": [
+        138,
+        124,
+        180,
+        213,
+        52,
+        140,
+        207,
+        221
+      ]
+    },
+    {
+      "name": "MultisigAuthorityRemoved",
+      "discriminator": [
+        222,
+        107,
+        89,
+        140,
+        220,
+        64,
+        189,
+        0
+      ]
+    },
+    {
+      "name": "MultisigConfigured",
+      "discriminator": [
+        1,
+        86,
+        255,
+        223,
+        234,
+        38,
+        121,
+        228
+      ]
+    },
+    {
+      "name": "MultisigProposalInitialized",
+      "discriminator": [
+        9,
+        212,
+        205,
+        211,
+        79,
+        18,
+        97,
+        183
+      ]
+    },
+    {
+      "name": "MultisigSignatureAdded",
+      "discriminator": [
+        214,
+        19,
+        23,
+        223,
+        248,
+        58,
+        236,
+        25
+      ]
+    },
+    {
+      "name": "MultisigThresholdUpdated",
+      "discriminator": [
+        13,
+        224,
+        143,
+        135,
+        253,
+        117,
+        27,
+        220
+      ]
+    },
+    {
+      "name": "ParameterChangeExecuted",
+      "discriminator": [
+        103,
+        81,
+        151,
+        152,
+        144,
+        77,
+        163,
+        72
+      ]
+    },
+    {
+      "name": "ProposalCancelled",
+      "discriminator": [
+        253,
+        59,
+        104,
+        46,
+        129,
+        78,
+        9,
+        14
+      ]
+    },
+    {
+      "name": "ProposalCreated",
+      "discriminator": [
+        186,
+        8,
+        160,
+        108,
+        81,
+        13,
+        51,
+        206
+      ]
+    },
+    {
+      "name": "ProposalExecuted",
+      "discriminator": [
+        92,
+        213,
+        189,
+        201,
+        101,
+        83,
+        111,
+        83
+      ]
+    },
+    {
+      "name": "ProposalStatusChanged",
+      "discriminator": [
+        208,
+        56,
+        3,
+        21,
+        190,
+        108,
+        86,
+        142
+      ]
+    },
+    {
+      "name": "ProtocolUpgradeInitiated",
+      "discriminator": [
+        42,
+        236,
+        153,
+        150,
+        43,
+        209,
+        79,
+        150
+      ]
+    },
+    {
+      "name": "SecurityParametersUpdated",
+      "discriminator": [
+        40,
+        33,
+        58,
+        215,
+        13,
+        162,
+        125,
+        105
+      ]
+    },
+    {
+      "name": "TreasurySpendExecuted",
+      "discriminator": [
+        14,
+        232,
+        182,
+        241,
+        247,
+        78,
+        188,
+        6
+      ]
+    },
+    {
+      "name": "VoteCast",
+      "discriminator": [
+        39,
+        53,
+        195,
+        104,
+        188,
+        17,
+        225,
+        213
+      ]
+    },
+    {
+      "name": "VoteSnapshotCreated",
+      "discriminator": [
+        45,
+        229,
+        213,
+        115,
+        254,
+        78,
+        137,
+        46
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "InvalidVotingPeriod",
+      "msg": "Invalid voting period - must be at least 1 hour"
+    },
+    {
+      "code": 6001,
+      "name": "InvalidExecutionDelay",
+      "msg": "Invalid execution delay - must be at least 30 minutes"
+    },
+    {
+      "code": 6002,
+      "name": "InsufficientTokensToPropose",
+      "msg": "Insufficient RIFTS tokens to create proposal"
+    },
+    {
+      "code": 6003,
+      "name": "InsufficientTokensToVote",
+      "msg": "Insufficient RIFTS tokens to vote"
+    },
+    {
+      "code": 6004,
+      "name": "VotingPeriodEnded",
+      "msg": "Voting period has ended"
+    },
+    {
+      "code": 6005,
+      "name": "VotingStillActive",
+      "msg": "Voting is still active"
+    },
+    {
+      "code": 6006,
+      "name": "ProposalNotActive",
+      "msg": "Proposal is not active"
+    },
+    {
+      "code": 6007,
+      "name": "AlreadyVoted",
+      "msg": "Already voted on this proposal"
+    },
+    {
+      "code": 6008,
+      "name": "ProposalDidNotPass",
+      "msg": "Proposal did not pass"
+    },
+    {
+      "code": 6009,
+      "name": "ExecutionDelayNotMet",
+      "msg": "Execution delay has not been met"
+    },
+    {
+      "code": 6010,
+      "name": "UnauthorizedCancel",
+      "msg": "Unauthorized to cancel proposal"
+    },
+    {
+      "code": 6011,
+      "name": "InsufficientHoldingPeriod",
+      "msg": "Insufficient holding period for voting"
+    },
+    {
+      "code": 6012,
+      "name": "InsufficientParticipation",
+      "msg": "Proposal did not meet minimum participation"
+    },
+    {
+      "code": 6013,
+      "name": "InsufficientRentExemption",
+      "msg": "Insufficient rent exemption for account creation"
+    },
+    {
+      "code": 6014,
+      "name": "InvalidSeedComponent",
+      "msg": "Invalid seed component in PDA derivation"
+    },
+    {
+      "code": 6015,
+      "name": "MathOverflow",
+      "msg": "Math overflow"
+    },
+    {
+      "code": 6016,
+      "name": "InvalidInputLength",
+      "msg": "Invalid input length"
+    },
+    {
+      "code": 6017,
+      "name": "TokenBalanceDecreased",
+      "msg": "Token balance decreased since proposal creation"
+    },
+    {
+      "code": 6018,
+      "name": "VoteOverflow",
+      "msg": "Vote count overflow detected"
+    },
+    {
+      "code": 6019,
+      "name": "InvalidRiftsMint",
+      "msg": "Invalid RIFTS mint for governance"
+    },
+    {
+      "code": 6020,
+      "name": "InvalidExecutionData",
+      "msg": "Invalid execution data format"
+    },
+    {
+      "code": 6021,
+      "name": "InvalidParameterValue",
+      "msg": "Invalid parameter value"
+    },
+    {
+      "code": 6022,
+      "name": "InvalidSpendAmount",
+      "msg": "Invalid spend amount"
+    },
+    {
+      "code": 6023,
+      "name": "ExceedsMaxSpend",
+      "msg": "Amount exceeds maximum treasury spend"
+    },
+    {
+      "code": 6024,
+      "name": "InvalidRecipient",
+      "msg": "Invalid recipient address"
+    },
+    {
+      "code": 6025,
+      "name": "InvalidProgramId",
+      "msg": "Invalid program ID for upgrade"
+    },
+    {
+      "code": 6026,
+      "name": "InvalidBufferAccount",
+      "msg": "Invalid buffer account"
+    },
+    {
+      "code": 6027,
+      "name": "InvalidSpillAccount",
+      "msg": "Invalid spill account"
+    },
+    {
+      "code": 6028,
+      "name": "UnauthorizedUpgrade",
+      "msg": "Unauthorized upgrade attempt"
+    },
+    {
+      "code": 6029,
+      "name": "SnapshotNotFound",
+      "msg": "Vote snapshot not found or invalid"
+    },
+    {
+      "code": 6030,
+      "name": "InvalidSnapshot",
+      "msg": "Invalid snapshot data"
+    },
+    {
+      "code": 6031,
+      "name": "InvalidTokenOwner",
+      "msg": "Invalid token owner"
+    },
+    {
+      "code": 6032,
+      "name": "MustUseAssociatedTokenAccount",
+      "msg": "Must use associated token account to prevent vote delegation"
+    },
+    {
+      "code": 6033,
+      "name": "SnapshotTooLate",
+      "msg": "Snapshot created too late - must be before voting starts"
+    },
+    {
+      "code": 6034,
+      "name": "SnapshotAlreadyExists",
+      "msg": "Snapshot already exists for this voter"
+    },
+    {
+      "code": 6035,
+      "name": "EmergencyActionExpired",
+      "msg": "Emergency action has expired and can no longer be executed"
+    },
+    {
+      "code": 6036,
+      "name": "ZeroTokenSupply",
+      "msg": "Cannot create proposals when token supply is zero"
+    },
+    {
+      "code": 6037,
+      "name": "InsufficientSignatures",
+      "msg": "Insufficient signatures for multisig governance action"
+    },
+    {
+      "code": 6038,
+      "name": "TooManyAuthorities",
+      "msg": "Too many authorities - governance cannot exceed 255 total authorities"
+    },
+    {
+      "code": 6039,
+      "name": "InvalidMultisigState",
+      "msg": "Invalid multisig signature state"
+    },
+    {
+      "code": 6040,
+      "name": "MultisigStateRequired",
+      "msg": "Multisig signature state is required for this proposal"
+    },
+    {
+      "code": 6041,
+      "name": "SignaturesExpired",
+      "msg": "Multisig signatures have expired"
+    },
+    {
+      "code": 6042,
+      "name": "InvalidMultisigSigner",
+      "msg": "Invalid multisig signer"
+    },
+    {
+      "code": 6043,
+      "name": "UnauthorizedMultisigSigner",
+      "msg": "Unauthorized multisig signer"
+    },
+    {
+      "code": 6044,
+      "name": "AlreadySigned",
+      "msg": "Already signed this proposal"
+    },
+    {
+      "code": 6045,
+      "name": "TooManySignatures",
+      "msg": "Too many signatures collected"
+    },
+    {
+      "code": 6046,
+      "name": "MultisigNotRequired",
+      "msg": "Multisig not required for this proposal type"
+    },
+    {
+      "code": 6047,
+      "name": "UnauthorizedSigner",
+      "msg": "Unauthorized signer for multisig governance"
+    },
+    {
+      "code": 6048,
+      "name": "InvalidProposal",
+      "msg": "Invalid proposal ID or state"
+    }
+  ],
+  "types": [
+    {
+      "name": "AuthorityChanged",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "old_authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "new_authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "changed_at",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "EmergencyActionExecuted",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "proposal_id",
+            "type": "u64"
+          },
+          {
+            "name": "action_type",
+            "type": {
+              "defined": {
+                "name": "EmergencyActionType"
+              }
+            }
+          },
+          {
+            "name": "executed_at",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "EmergencyActionType",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "PauseProtocol"
+          },
+          {
+            "name": "UnpauseProtocol"
+          },
+          {
+            "name": "UpdateOracleRegistry"
+          },
+          {
+            "name": "FreezeAssets"
+          },
+          {
+            "name": "UnfreezeAssets"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Governance",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "additional_authorities",
+            "docs": [
+              "**SECURITY FIX**: Additional authorities for multisig governance"
+            ],
+            "type": {
+              "vec": "pubkey"
+            }
+          },
+          {
+            "name": "required_signatures",
+            "type": "u8"
+          },
+          {
+            "name": "rifts_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "min_voting_period",
+            "type": "i64"
+          },
+          {
+            "name": "min_execution_delay",
+            "type": "i64"
+          },
+          {
+            "name": "total_proposals",
+            "type": "u64"
+          },
+          {
+            "name": "total_executed",
+            "type": "u64"
+          },
+          {
+            "name": "max_treasury_spend",
+            "type": "u64"
+          },
+          {
+            "name": "emergency_pause_active",
+            "type": "bool"
+          },
+          {
+            "name": "pause_initiated_at",
+            "type": "i64"
+          },
+          {
+            "name": "pause_duration",
+            "type": "i64"
+          },
+          {
+            "name": "assets_frozen",
+            "type": "bool"
+          },
+          {
+            "name": "freeze_initiated_at",
+            "type": "i64"
+          },
+          {
+            "name": "upgrade_ready_timestamp",
+            "type": "i64"
+          },
+          {
+            "name": "pending_parameter_changes",
+            "type": {
+              "option": {
+                "defined": {
+                  "name": "ProposalParameterChanges"
+                }
+              }
+            }
+          },
+          {
+            "name": "parameter_change_proposal_id",
+            "type": "u64"
+          },
+          {
+            "name": "pending_treasury_spend",
+            "type": {
+              "option": {
+                "defined": {
+                  "name": "TreasurySpendInstruction"
+                }
+              }
+            }
+          },
+          {
+            "name": "treasury_spend_proposal_id",
+            "type": "u64"
+          },
+          {
+            "name": "pending_protocol_upgrade",
+            "type": {
+              "option": {
+                "defined": {
+                  "name": "ProtocolUpgradeInstruction"
+                }
+              }
+            }
+          },
+          {
+            "name": "protocol_upgrade_proposal_id",
+            "type": "u64"
+          },
+          {
+            "name": "pending_oracle_updates",
+            "type": {
+              "option": {
+                "vec": "pubkey"
+              }
+            }
+          },
+          {
+            "name": "oracle_update_proposal_id",
+            "type": "u64"
+          },
+          {
+            "name": "treasury_fee_bps",
+            "type": {
+              "option": "u16"
+            }
+          },
+          {
+            "name": "jupiter_program_id",
+            "type": {
+              "option": "pubkey"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "GovernanceInitialized",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "rifts_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "min_voting_period",
+            "type": "i64"
+          },
+          {
+            "name": "min_execution_delay",
+            "type": "i64"
+          },
+          {
+            "name": "initialized_at",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "MultisigAuthorityAdded",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "governance",
+            "type": "pubkey"
+          },
+          {
+            "name": "new_authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "total_authorities",
+            "type": "u8"
+          },
+          {
+            "name": "updated_at",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "MultisigAuthorityRemoved",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "governance",
+            "type": "pubkey"
+          },
+          {
+            "name": "removed_authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "total_authorities",
+            "type": "u8"
+          },
+          {
+            "name": "updated_signatures_required",
+            "type": "u8"
+          },
+          {
+            "name": "updated_at",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "MultisigConfigured",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "authorities",
+            "type": {
+              "vec": "pubkey"
+            }
+          },
+          {
+            "name": "required_signatures",
+            "type": "u8"
+          },
+          {
+            "name": "configured_at",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "MultisigProposalInitialized",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "proposal_id",
+            "type": "u64"
+          },
+          {
+            "name": "initialized_at",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "MultisigSignatureAdded",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "proposal_id",
+            "type": "u64"
+          },
+          {
+            "name": "signer",
+            "type": "pubkey"
+          },
+          {
+            "name": "signature_count",
+            "type": "u8"
+          },
+          {
+            "name": "required_signatures",
+            "type": "u8"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "MultisigSignatureState",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "proposal_id",
+            "type": "u64"
+          },
+          {
+            "name": "signature_count",
+            "type": "u8"
+          },
+          {
+            "name": "created_at",
+            "type": "i64"
+          },
+          {
+            "name": "last_signature_at",
+            "type": "i64"
+          },
+          {
+            "name": "signers",
+            "type": {
+              "array": [
+                "pubkey",
+                10
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "MultisigThresholdUpdated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "governance",
+            "type": "pubkey"
+          },
+          {
+            "name": "old_threshold",
+            "type": "u8"
+          },
+          {
+            "name": "new_threshold",
+            "type": "u8"
+          },
+          {
+            "name": "total_authorities",
+            "type": "u8"
+          },
+          {
+            "name": "updated_at",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ParameterChangeExecuted",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "proposal_id",
+            "type": "u64"
+          },
+          {
+            "name": "changes",
+            "type": {
+              "defined": {
+                "name": "ProposalParameterChanges"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "Proposal",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "id",
+            "type": "u64"
+          },
+          {
+            "name": "proposer",
+            "type": "pubkey"
+          },
+          {
+            "name": "title",
+            "type": "string"
+          },
+          {
+            "name": "description",
+            "type": "string"
+          },
+          {
+            "name": "proposal_type",
+            "type": {
+              "defined": {
+                "name": "ProposalType"
+              }
+            }
+          },
+          {
+            "name": "execution_data",
+            "type": "bytes"
+          },
+          {
+            "name": "voting_start",
+            "type": "i64"
+          },
+          {
+            "name": "voting_end",
+            "type": "i64"
+          },
+          {
+            "name": "votes_for",
+            "type": "u128"
+          },
+          {
+            "name": "votes_against",
+            "type": "u128"
+          },
+          {
+            "name": "total_voters",
+            "type": "u32"
+          },
+          {
+            "name": "status",
+            "type": {
+              "defined": {
+                "name": "ProposalStatus"
+              }
+            }
+          },
+          {
+            "name": "created_at",
+            "type": "i64"
+          },
+          {
+            "name": "executed_at",
+            "type": "i64"
+          },
+          {
+            "name": "snapshot_taken_at",
+            "type": "i64"
+          },
+          {
+            "name": "snapshot_slot",
+            "type": "u64"
+          },
+          {
+            "name": "min_participation_required",
+            "type": "u64"
+          },
+          {
+            "name": "emergency_expiry_time",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ProposalCancelled",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "proposal_id",
+            "type": "u64"
+          },
+          {
+            "name": "cancelled_by",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ProposalCreated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "proposal_id",
+            "type": "u64"
+          },
+          {
+            "name": "proposer",
+            "type": "pubkey"
+          },
+          {
+            "name": "title",
+            "type": "string"
+          },
+          {
+            "name": "proposal_type",
+            "type": {
+              "defined": {
+                "name": "ProposalType"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "ProposalExecuted",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "proposal_id",
+            "type": "u64"
+          },
+          {
+            "name": "executed_by",
+            "type": "pubkey"
+          },
+          {
+            "name": "executed_at",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ProposalParameterChanges",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "burn_fee_bps",
+            "type": {
+              "option": "u16"
+            }
+          },
+          {
+            "name": "partner_fee_bps",
+            "type": {
+              "option": "u16"
+            }
+          },
+          {
+            "name": "wrap_fee_bps",
+            "type": {
+              "option": "u16"
+            }
+          },
+          {
+            "name": "unwrap_fee_bps",
+            "type": {
+              "option": "u16"
+            }
+          },
+          {
+            "name": "treasury_fee_bps",
+            "type": {
+              "option": "u16"
+            }
+          },
+          {
+            "name": "jupiter_program_id",
+            "type": {
+              "option": "pubkey"
+            }
+          },
+          {
+            "name": "oracle_update_interval",
+            "type": {
+              "option": "i64"
+            }
+          },
+          {
+            "name": "max_rebalance_interval",
+            "type": {
+              "option": "i64"
+            }
+          },
+          {
+            "name": "arbitrage_threshold_bps",
+            "type": {
+              "option": "u16"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "ProposalStatus",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "Active"
+          },
+          {
+            "name": "Executed"
+          },
+          {
+            "name": "Cancelled"
+          },
+          {
+            "name": "Failed"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ProposalStatusChanged",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "proposal_id",
+            "type": "u64"
+          },
+          {
+            "name": "old_status",
+            "type": {
+              "defined": {
+                "name": "ProposalStatus"
+              }
+            }
+          },
+          {
+            "name": "new_status",
+            "type": {
+              "defined": {
+                "name": "ProposalStatus"
+              }
+            }
+          },
+          {
+            "name": "changed_at",
+            "type": "i64"
+          },
+          {
+            "name": "changed_by",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ProposalType",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "ParameterChange"
+          },
+          {
+            "name": "TreasurySpend"
+          },
+          {
+            "name": "ProtocolUpgrade"
+          },
+          {
+            "name": "EmergencyAction"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ProtocolUpgradeInitiated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "proposal_id",
+            "type": "u64"
+          },
+          {
+            "name": "new_program_id",
+            "type": "pubkey"
+          },
+          {
+            "name": "ready_timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ProtocolUpgradeInstruction",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "new_program_id",
+            "type": "pubkey"
+          },
+          {
+            "name": "buffer_account",
+            "type": "pubkey"
+          },
+          {
+            "name": "spill_account",
+            "type": "pubkey"
+          },
+          {
+            "name": "upgrade_authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "version",
+            "type": "string"
+          }
+        ]
+      }
+    },
+    {
+      "name": "SecurityParametersUpdated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "proposal_id",
+            "type": "u64"
+          },
+          {
+            "name": "updated_by",
+            "type": "pubkey"
+          },
+          {
+            "name": "min_voting_period",
+            "type": {
+              "option": "i64"
+            }
+          },
+          {
+            "name": "min_execution_delay",
+            "type": {
+              "option": "i64"
+            }
+          },
+          {
+            "name": "max_treasury_spend",
+            "type": {
+              "option": "u64"
+            }
+          },
+          {
+            "name": "updated_at",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "TreasurySpendExecuted",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "proposal_id",
+            "type": "u64"
+          },
+          {
+            "name": "recipient",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "token_mint",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "TreasurySpendInstruction",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "recipient",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "token_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "description",
+            "type": "string"
+          }
+        ]
+      }
+    },
+    {
+      "name": "VoteCast",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "proposal_id",
+            "type": "u64"
+          },
+          {
+            "name": "voter",
+            "type": "pubkey"
+          },
+          {
+            "name": "vote",
+            "type": {
+              "defined": {
+                "name": "VoteChoice"
+              }
+            }
+          },
+          {
+            "name": "voting_power",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "VoteChoice",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "For"
+          },
+          {
+            "name": "Against"
+          }
+        ]
+      }
+    },
+    {
+      "name": "VoteRecord",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "voter",
+            "type": "pubkey"
+          },
+          {
+            "name": "proposal",
+            "type": "pubkey"
+          },
+          {
+            "name": "vote",
+            "type": {
+              "defined": {
+                "name": "VoteChoice"
+              }
+            }
+          },
+          {
+            "name": "voting_power",
+            "type": "u64"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "VoteSnapshot",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "proposal_id",
+            "type": "u64"
+          },
+          {
+            "name": "voter",
+            "type": "pubkey"
+          },
+          {
+            "name": "snapshot_power",
+            "type": "u64"
+          },
+          {
+            "name": "snapshot_taken_at",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "VoteSnapshotCreated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "proposal_id",
+            "type": "u64"
+          },
+          {
+            "name": "voter",
+            "type": "pubkey"
+          },
+          {
+            "name": "snapshot_power",
+            "type": "u64"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    }
+  ]
+}

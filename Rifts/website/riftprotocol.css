@@ -1,0 +1,132 @@
+@font-face{
+    font-family: 'Arial';
+    font-style: normal;
+    font-weight: 400;
+    src: local('Arial'),
+         url('resources/arial.woff');
+}
+@font-face{
+    font-family: 'Halfre';
+    font-style: normal;
+    font-weight: 400;
+    src: local('Halfre'),
+         url('resources/halfre.woff');
+}
+@font-face{
+    font-family: 'Halfre';
+    font-style: normal;
+    font-weight: 700;
+    src: local('Halfre Bold'),
+         url('resources/halfre_bold.woff');
+}
+
+
+html {
+ width: 100% !important;
+ overflow-x: hidden !important;
+background-color: #000000;
+    touch-action: pan-y !important;
+}
+
+ .mask {
+            width: 100%;
+          
+            mask-image: 
+                radial-gradient(circle at center, white 50%, transparent 100%),
+                linear-gradient(to bottom, white 90%, transparent 100%);
+            -webkit-mask-image: 
+                radial-gradient(circle at center, white 10%, transparent 80%),
+                linear-gradient(to bottom, white 70%, transparent 100%);
+            mask-composite: intersect;
+            -webkit-mask-composite: destination-in;
+            overflow: hidden;
+        }
+
+
+
+.grupo-limite {
+  position: absolute!important;
+  left: 50%!important;;
+  transform: translateX(-50%)!important;;
+  max-width: 1900px!important;
+  min-width: 1000px!important;
+}
+
+.grupo-padre {
+  display: flex!important;
+  justify-content: center!important; /* 🔹 centra horizontal */
+}
+
+
+.boxes {
+  width: 100%;
+  height: auto;
+  display: block;
+
+
+  /* Aplica transparencia en la parte de abajo */
+  mask-image: linear-gradient(to top, black 0%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to top, black 0%, transparent 100%);
+
+
+  overflow: hidden;
+}
+
+
+.boxes2 {
+  width: 100%;
+  height: auto;
+
+
+
+  /* Aplica transparencia en la parte de abajo */
+  mask-image: linear-gradient(to bottom, black 0%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to bottom, black 0%, transparent 100%);
+
+
+  overflow: hidden;
+}
+
+.footer {
+  position: absolute!important;
+  left: 50%!important;;
+  transform: translateX(-50%)!important;;
+  max-width: 1900px!important;
+min-width: 900px!important;;
+}
+
+.a {
+  position: absolute!important;
+  left: 50%!important;;
+  transform: translateX(-50%)!important;;
+  max-width: 1150px!important;
+min-width: 1030px!important;;
+}
+.a2{
+  position: absolute!important;
+  left: 50%!important;;
+  transform: translateX(-50%)!important;;
+  max-width: 1150px!important;
+min-width: 900px!important;;
+}
+.a3{
+  position: absolute!important;
+  left: 50%!important;;
+  transform: translateX(-50%)!important;;
+  max-width: 1550px!important;
+min-width: 100px!important;;
+}
+
+.pin{ 
+  position: fixed !important;
+
+
+}
+
+.mobile{
+  position: absolute!important;
+  left: 50%!important;;
+  transform: translateX(-50%)!important;;
+max-width: 700px!important;;
+min-width: 350px!important;;
+}

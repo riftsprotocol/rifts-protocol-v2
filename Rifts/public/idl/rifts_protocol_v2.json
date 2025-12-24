@@ -1,0 +1,4270 @@
+{
+  "address": "6FEZJKsxbDm5W4Ad4eogNehivRKKGCHJHRnKUSFbLpKt",
+  "metadata": {
+    "name": "rifts_protocol",
+    "version": "2.0.0",
+    "spec": "0.1.0",
+    "description": "Rifts Protocol V2 - SPL Token-2022 with Transfer Fees"
+  },
+  "instructions": [
+    {
+      "name": "admin_claim_withheld_fees",
+      "docs": [
+        "Owner only: Update treasury wallet",
+        "**FIX HIGH #5**: REMOVED update_treasury_wallet function",
+        "Treasury wallet is IMMUTABLE after rift creation because:",
+        "1. Mint's withdraw_withheld_authority is set to TREASURY_WALLET at creation",
+        "2. This authority cannot be changed after mint initialization",
+        "3. Changing rift.treasury_wallet would create mismatch with mint authority",
+        "4. New treasury could not claim withheld fees (only old hardcoded key could)",
+        "",
+        "SECURITY: Treasury is intentionally immutable to prevent authority confusion",
+        "If treasury compromise is a concern, create new rift with new treasury",
+        "",
+        "Previous function removed to prevent misleading treasury \"updates\" that don't work",
+        "Admin function: Withdraw funds from fee collector vault",
+        "**TOKEN-2022**: Admin function to claim withheld transfer fees from a single Token-2022 account",
+        "Transfer fees are automatically withheld in recipient accounts during transfers",
+        "This instruction harvests those fees and sends them to the treasury",
+        "Call this for each account that has withheld fees",
+        "**CRITICAL FIX #2**: Only PROGRAM_AUTHORITY can claim fees (set as withdraw_withheld_authority)"
+      ],
+      "discriminator": [
+        29,
+        165,
+        96,
+        233,
+        206,
+        79,
+        214,
+        250
+      ],
+      "accounts": [
+        {
+          "name": "treasury_signer",
+          "docs": [
+            "**WITHHELD AUTHORITY FIX**: Must be treasury_wallet (withdraw_withheld_authority)",
+            "The treasury_wallet is set as withdraw_withheld_authority during mint creation"
+          ],
+          "signer": true
+        },
+        {
+          "name": "rift",
+          "writable": true
+        },
+        {
+          "name": "rift_mint",
+          "docs": [
+            "RIFT mint (Token-2022 with transfer fee extension)"
+          ],
+          "writable": true
+        },
+        {
+          "name": "withheld_vault",
+          "docs": [
+            "**FEE ROUTING**: Withheld vault to receive withheld transfer fees (RIFT tokens)"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  105,
+                  116,
+                  104,
+                  104,
+                  101,
+                  108,
+                  100,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "rift"
+              }
+            ]
+          }
+        },
+        {
+          "name": "source_account",
+          "docs": [
+            "Source account with withheld fees to claim"
+          ],
+          "writable": true
+        },
+        {
+          "name": "token_program",
+          "docs": [
+            "**FIX MEDIUM #45**: Constrain token_program for defense-in-depth",
+            "Currently unused (handler uses hardcoded spl_token_2022::ID), but constraint",
+            "prevents future refactoring from introducing vulnerability"
+          ]
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "admin_close_rift",
+      "docs": [
+        "Admin function: Close any rift regardless of creator (program authority only)"
+      ],
+      "discriminator": [
+        178,
+        154,
+        88,
+        155,
+        4,
+        61,
+        187,
+        61
+      ],
+      "accounts": [
+        {
+          "name": "program_authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "rift",
+          "writable": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "admin_emergency_withdraw_vault",
+      "docs": [
+        "Emergency admin function to withdraw tokens from vault",
+        "**CRITICAL SECURITY**: Requires BOTH admin authorities to prevent single-point-of-failure",
+        "Only use in case of critical issues like closed rifts with locked funds",
+        "",
+        "**ACKNOWLEDGED SECURITY TRADE-OFF (High Issue #3):**",
+        "This function does NOT verify:",
+        "1. That the rift is actually closed",
+        "2. That the vault belongs to the specified rift",
+        "This is intentional to allow emergency recovery of funds in edge cases where:",
+        "- Rift state is corrupted but vault is valid",
+        "- Need to recover from program bugs or attacks",
+        "- Need manual intervention for stuck funds",
+        "",
+        "MITIGATION: Requires BOTH independent admin signatures (2-of-2 multisig)",
+        "- PROGRAM_AUTHORITY: 4UAWKQ94DXYcUAWw3hddLThq3bn9i3jxCZE3DAnbSN2K",
+        "- ADMIN_AUTHORITY_2: 8xymifw4FrLazZKG3SDouRSLVmMcFBBnF13iCtdEdEd2",
+        "",
+        "Both keys must explicitly approve any emergency withdrawal, providing accountability."
+      ],
+      "discriminator": [
+        39,
+        9,
+        128,
+        133,
+        32,
+        77,
+        95,
+        47
+      ],
+      "accounts": [
+        {
+          "name": "admin_authority_1",
+          "docs": [
+            "**SECURITY FIX #3**: First admin authority (PROGRAM_AUTHORITY)"
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "admin_authority_2",
+          "docs": [
+            "**SECURITY FIX #3**: Second admin authority (ADMIN_AUTHORITY_2)"
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "rift",
+          "docs": [
+            "**ACCOUNTING FIX**: Rift account to update accounting when withdrawing"
+          ],
+          "writable": true
+        },
+        {
+          "name": "vault",
+          "docs": [
+            "Vault holding the underlying tokens"
+          ],
+          "writable": true
+        },
+        {
+          "name": "vault_authority",
+          "docs": [
+            "Vault authority PDA - will be verified against closed_rift_pubkey parameter"
+          ]
+        },
+        {
+          "name": "admin_token_account",
+          "docs": [
+            "Admin's token account to receive withdrawn tokens"
+          ],
+          "writable": true
+        },
+        {
+          "name": "token_program"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        },
+        {
+          "name": "closed_rift_pubkey",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
+      "name": "admin_fix_vault_conflict",
+      "docs": [
+        "Admin function: Fix vault ownership conflicts",
+        "**SECURITY FIX #4**: Only PROGRAM_AUTHORITY can fix vault conflicts"
+      ],
+      "discriminator": [
+        19,
+        234,
+        3,
+        190,
+        49,
+        215,
+        12,
+        197
+      ],
+      "accounts": [
+        {
+          "name": "program_authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "rift",
+          "writable": true
+        },
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "rift"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "rift"
+              }
+            ]
+          }
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "admin_reset_reentrancy_guard",
+      "docs": [
+        "**FIX HIGH #1**: Admin function to reset stuck reentrancy guard",
+        "If a transaction fails mid-execution, the guard may remain true",
+        "This function allows PROGRAM_AUTHORITY to reset it"
+      ],
+      "discriminator": [
+        119,
+        253,
+        243,
+        127,
+        173,
+        215,
+        96,
+        36
+      ],
+      "accounts": [
+        {
+          "name": "program_authority",
+          "docs": [
+            "Program authority (only one authorized to reset guard)"
+          ],
+          "signer": true
+        },
+        {
+          "name": "rift",
+          "docs": [
+            "Rift with potentially stuck reentrancy guard"
+          ],
+          "writable": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "admin_set_transfer_fee",
+      "docs": [
+        "**TOKEN-2022**: Admin function to update transfer fee on existing rift",
+        "Only PROGRAM_AUTHORITY can modify fees (set as transfer_fee_config_authority)",
+        "Maximum fee is capped at 2% (200 bps) for safety"
+      ],
+      "discriminator": [
+        232,
+        193,
+        168,
+        3,
+        80,
+        92,
+        215,
+        176
+      ],
+      "accounts": [
+        {
+          "name": "program_authority",
+          "docs": [
+            "Must be PROGRAM_AUTHORITY (transfer_fee_config_authority)"
+          ],
+          "signer": true
+        },
+        {
+          "name": "rift",
+          "writable": true
+        },
+        {
+          "name": "rift_mint",
+          "docs": [
+            "RIFT mint (Token-2022 with transfer fee extension)"
+          ],
+          "writable": true
+        },
+        {
+          "name": "token_program",
+          "docs": [
+            "**FIX MEDIUM #45**: Constrain token_program for defense-in-depth",
+            "Currently unused (handler uses hardcoded spl_token_2022::ID), but constraint",
+            "prevents future refactoring from introducing vulnerability"
+          ]
+        }
+      ],
+      "args": [
+        {
+          "name": "new_fee_bps",
+          "type": "u16"
+        }
+      ]
+    },
+    {
+      "name": "admin_update_rift_metadata",
+      "docs": [
+        "Admin function to create or update metadata for a rift token"
+      ],
+      "discriminator": [
+        68,
+        65,
+        212,
+        3,
+        170,
+        27,
+        16,
+        149
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "rift",
+          "docs": [
+            "The rift account"
+          ]
+        },
+        {
+          "name": "rift_mint",
+          "docs": [
+            "The rift mint to create metadata for",
+            "**SECURITY FIX**: Constrain to rift.rift_mint and verify mint authority"
+          ],
+          "writable": true
+        },
+        {
+          "name": "rift_mint_authority",
+          "docs": [
+            "Rift mint authority PDA"
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  105,
+                  102,
+                  116,
+                  95,
+                  109,
+                  105,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "rift"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "name",
+          "type": "string"
+        },
+        {
+          "name": "symbol",
+          "type": "string"
+        },
+        {
+          "name": "uri",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "admin_withdraw_fees_vault",
+      "docs": [
+        "**FEE MANAGEMENT**: Admin function to withdraw collected wrap/unwrap fees from fees_vault",
+        "Only PROGRAM_AUTHORITY can withdraw fees to treasury",
+        "Transfers underlying tokens from fees_vault to treasury"
+      ],
+      "discriminator": [
+        189,
+        198,
+        1,
+        186,
+        187,
+        158,
+        186,
+        41
+      ],
+      "accounts": [
+        {
+          "name": "program_authority",
+          "docs": [
+            "Must be PROGRAM_AUTHORITY"
+          ],
+          "signer": true
+        },
+        {
+          "name": "rift",
+          "writable": true
+        },
+        {
+          "name": "underlying_mint",
+          "docs": [
+            "Underlying mint (the original token being wrapped)"
+          ]
+        },
+        {
+          "name": "fees_vault",
+          "docs": [
+            "Fees vault containing collected wrap/unwrap fees (underlying tokens)"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  101,
+                  101,
+                  115,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "rift"
+              }
+            ]
+          }
+        },
+        {
+          "name": "treasury_account",
+          "docs": [
+            "Treasury account to receive fees (underlying tokens)"
+          ],
+          "writable": true
+        },
+        {
+          "name": "vault_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "rift"
+              }
+            ]
+          }
+        },
+        {
+          "name": "token_program",
+          "docs": [
+            "**FIX HIGH #41**: Constrain token_program to SPL Token or Token-2022 only",
+            "Defense-in-depth: Even though admin-only, prevent admin error or compromised key from using malicious program"
+          ]
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "admin_withdraw_withheld_vault",
+      "docs": [
+        "**FEE MANAGEMENT**: Admin function to withdraw collected withheld fees from withheld_vault",
+        "Only PROGRAM_AUTHORITY can withdraw fees to treasury",
+        "Transfers RIFT tokens from withheld_vault to treasury"
+      ],
+      "discriminator": [
+        238,
+        210,
+        255,
+        128,
+        253,
+        157,
+        255,
+        222
+      ],
+      "accounts": [
+        {
+          "name": "program_authority",
+          "docs": [
+            "Must be PROGRAM_AUTHORITY"
+          ],
+          "signer": true
+        },
+        {
+          "name": "rift",
+          "writable": true
+        },
+        {
+          "name": "rift_mint",
+          "docs": [
+            "RIFT mint (Token-2022 with transfer fee extension)"
+          ]
+        },
+        {
+          "name": "withheld_vault",
+          "docs": [
+            "Withheld vault containing collected withheld transfer fees (RIFT tokens)"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  105,
+                  116,
+                  104,
+                  104,
+                  101,
+                  108,
+                  100,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "rift"
+              }
+            ]
+          }
+        },
+        {
+          "name": "treasury_rift_account",
+          "docs": [
+            "Treasury RIFT token account to receive fees (RIFT tokens)"
+          ],
+          "writable": true
+        },
+        {
+          "name": "vault_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "rift"
+              }
+            ]
+          }
+        },
+        {
+          "name": "token_program",
+          "docs": [
+            "**FIX HIGH #42**: Constrain token_program to Token-2022 only (withheld_vault holds RIFT tokens)",
+            "Defense-in-depth: Even though admin-only, prevent admin error or compromised key from using malicious program"
+          ]
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "cancel_oracle_change",
+      "docs": [
+        "**FIX ISSUE #5**: Cancel pending oracle change",
+        "Allows creator to cancel before delay expires"
+      ],
+      "discriminator": [
+        69,
+        68,
+        88,
+        77,
+        134,
+        215,
+        67,
+        76
+      ],
+      "accounts": [
+        {
+          "name": "creator",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "rift",
+          "writable": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "claim_withheld_fees",
+      "docs": [
+        "**TOKEN-2022**: Claim withheld transfer fees from a single Token-2022 account",
+        "Only treasury wallet can call this (set as withdraw_withheld_authority during mint creation)",
+        "Transfers withheld fees from source account to withheld_vault"
+      ],
+      "discriminator": [
+        111,
+        91,
+        13,
+        201,
+        40,
+        88,
+        182,
+        177
+      ],
+      "accounts": [
+        {
+          "name": "treasury_signer",
+          "docs": [
+            "**PER-RIFT TREASURY FIX**: Treasury wallet must match rift.treasury_wallet",
+            "Authorization check is done in the function handler to use per-rift treasury"
+          ],
+          "signer": true
+        },
+        {
+          "name": "rift",
+          "writable": true
+        },
+        {
+          "name": "rift_mint",
+          "docs": [
+            "RIFT mint (Token-2022 with transfer fee extension)"
+          ],
+          "writable": true
+        },
+        {
+          "name": "withheld_vault",
+          "docs": [
+            "Withheld vault to receive withheld transfer fees (RIFT tokens)"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  105,
+                  116,
+                  104,
+                  104,
+                  101,
+                  108,
+                  100,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "rift"
+              }
+            ]
+          }
+        },
+        {
+          "name": "source_account",
+          "docs": [
+            "Source account with withheld fees to claim"
+          ],
+          "writable": true
+        },
+        {
+          "name": "token_program",
+          "docs": [
+            "**FIX MEDIUM #45**: Constrain token_program for defense-in-depth",
+            "Currently unused (handler uses hardcoded spl_token_2022::ID), but constraint",
+            "prevents future refactoring from introducing vulnerability"
+          ]
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "cleanup_stuck_accounts",
+      "docs": [
+        "Clean up stuck accounts from failed rift creation attempts",
+        "**SECURITY FIX**: Only allow creator to clean up their own stuck accounts"
+      ],
+      "discriminator": [
+        82,
+        128,
+        69,
+        50,
+        13,
+        215,
+        71,
+        30
+      ],
+      "accounts": [
+        {
+          "name": "creator",
+          "docs": [
+            "The creator who originally tried to create the rift",
+            "**SECURITY FIX**: Require creator signature to prevent griefing"
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "underlying_mint",
+          "docs": [
+            "The underlying mint that was used in the failed rift creation"
+          ]
+        },
+        {
+          "name": "stuck_rift_mint",
+          "docs": [
+            "The stuck rift mint account that needs to be cleaned up",
+            "**FIX HIGH #8**: Use UncheckedAccount to support Token-2022 mint closing via close_account",
+            "**FIX CRITICAL #14**: Use correct PDA seeds matching create_rift (underlying_mint, creator)",
+            "We close this account using Token-2022's close_account instruction"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  105,
+                  102,
+                  116,
+                  95,
+                  109,
+                  105,
+                  110,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "underlying_mint"
+              },
+              {
+                "kind": "account",
+                "path": "creator"
+              }
+            ]
+          }
+        },
+        {
+          "name": "expected_rift",
+          "docs": [
+            "The expected rift account location (should be empty/non-existent)"
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  105,
+                  102,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "underlying_mint"
+              },
+              {
+                "kind": "account",
+                "path": "creator"
+              }
+            ]
+          }
+        },
+        {
+          "name": "rift_mint_authority",
+          "docs": [
+            "**FIX HIGH #8**: Add mint_authority PDA so we can sign close_account",
+            "Mint authority PDA - controls mint operations"
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  105,
+                  102,
+                  116,
+                  95,
+                  109,
+                  105,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "expected_rift"
+              }
+            ]
+          }
+        },
+        {
+          "name": "payer",
+          "docs": [
+            "The account that will pay for the transaction (can be anyone)"
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "token_program",
+          "docs": [
+            "**FIX HIGH #8**: Add Token-2022 program for close_account instruction"
+          ],
+          "address": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "cleanup_stuck_vanity_accounts",
+      "docs": [
+        "**FIX CRITICAL #10**: Cleanup stuck VANITY rift accounts",
+        "This instruction handles vanity rifts that failed during creation",
+        "Vanity rifts use different PDA seeds than regular rifts, so they need a separate cleanup function",
+        "",
+        "**SECURITY**: Only the original creator can cleanup their stuck vanity mint",
+        "**MECHANISM**: Uses Token-2022's close_account instruction to properly close the mint and return rent"
+      ],
+      "discriminator": [
+        176,
+        77,
+        58,
+        109,
+        205,
+        250,
+        15,
+        10
+      ],
+      "accounts": [
+        {
+          "name": "creator",
+          "docs": [
+            "The creator who originally tried to create the vanity rift",
+            "**SECURITY FIX**: Require creator signature to prevent griefing"
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "underlying_mint",
+          "docs": [
+            "The underlying mint that was used in the failed vanity rift creation"
+          ]
+        },
+        {
+          "name": "stuck_rift_mint",
+          "docs": [
+            "The stuck VANITY rift mint account that needs to be cleaned up",
+            "**FIX CRITICAL #10**: Uses VANITY seeds (includes vanity_seed)",
+            "We close this account using Token-2022's close_account instruction"
+          ],
+          "writable": true
+        },
+        {
+          "name": "expected_rift",
+          "docs": [
+            "The expected rift account location (should be empty/non-existent)",
+            "**FIX CRITICAL #26**: Vanity rifts have DIFFERENT seeds than regular rifts!"
+          ]
+        },
+        {
+          "name": "rift_mint_authority",
+          "docs": [
+            "**FIX CRITICAL #10**: Mint authority PDA - same for vanity and non-vanity",
+            "Mint authority PDA - controls mint operations"
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  105,
+                  102,
+                  116,
+                  95,
+                  109,
+                  105,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "expected_rift"
+              }
+            ]
+          }
+        },
+        {
+          "name": "payer",
+          "docs": [
+            "The account that will pay for the transaction (can be anyone)"
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "token_program",
+          "docs": [
+            "**FIX CRITICAL #10**: Token-2022 program for close_account instruction"
+          ],
+          "address": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"
+        }
+      ],
+      "args": [
+        {
+          "name": "vanity_seed",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "seed_len",
+          "type": "u8"
+        }
+      ]
+    },
+    {
+      "name": "close_rift",
+      "docs": [
+        "Close a rift and return rent to creator (for fixing invalid vaults)",
+        "**FIX CRITICAL #12**: Now checks ALL vaults are empty before allowing close"
+      ],
+      "discriminator": [
+        54,
+        244,
+        126,
+        214,
+        108,
+        32,
+        37,
+        49
+      ],
+      "accounts": [
+        {
+          "name": "creator",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "rift"
+          ]
+        },
+        {
+          "name": "rift",
+          "writable": true
+        },
+        {
+          "name": "vault",
+          "docs": [
+            "**FIX CRITICAL #27**: Make vault optional - may not be initialized if rift never used"
+          ],
+          "writable": true
+        },
+        {
+          "name": "fees_vault",
+          "docs": [
+            "**FIX CRITICAL #27**: Make fees_vault optional - may be system_program::ID if never initialized"
+          ],
+          "writable": true
+        },
+        {
+          "name": "withheld_vault",
+          "docs": [
+            "**FIX CRITICAL #27**: Make withheld_vault optional - may be system_program::ID if never initialized"
+          ],
+          "writable": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "create_rift",
+      "docs": [
+        "Initialize a new Rift (wrapped token vault) - STACK OPTIMIZED (Original PDA version)"
+      ],
+      "discriminator": [
+        28,
+        97,
+        104,
+        163,
+        36,
+        182,
+        212,
+        51
+      ],
+      "accounts": [
+        {
+          "name": "creator",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "rift",
+          "docs": [
+            "**CRITICAL SPACE FIX**: Use explicit Borsh size calculation",
+            "Option<Pubkey> = 33 bytes in Borsh (1 discriminant + 32 pubkey), not from std::mem::size_of",
+            "Correct size: 8 (discriminator) + 774 (struct) = 782 bytes"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  105,
+                  102,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "underlying_mint"
+              },
+              {
+                "kind": "account",
+                "path": "creator"
+              }
+            ]
+          }
+        },
+        {
+          "name": "underlying_mint"
+        },
+        {
+          "name": "rift_mint",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  105,
+                  102,
+                  116,
+                  95,
+                  109,
+                  105,
+                  110,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "underlying_mint"
+              },
+              {
+                "kind": "account",
+                "path": "creator"
+              }
+            ]
+          }
+        },
+        {
+          "name": "rift_mint_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  105,
+                  102,
+                  116,
+                  95,
+                  109,
+                  105,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "rift"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault",
+          "docs": [
+            "**ATOMIC INIT**: Vault token account (initialized during create_rift)"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "rift"
+              }
+            ]
+          }
+        },
+        {
+          "name": "fees_vault",
+          "docs": [
+            "**ATOMIC INIT**: Fees vault token account (initialized during create_rift)"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  101,
+                  101,
+                  115,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "rift"
+              }
+            ]
+          }
+        },
+        {
+          "name": "withheld_vault",
+          "docs": [
+            "**ATOMIC INIT**: Withheld vault token account (initialized during create_rift)"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  105,
+                  116,
+                  104,
+                  104,
+                  101,
+                  108,
+                  100,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "rift"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "rift"
+              }
+            ]
+          }
+        },
+        {
+          "name": "token_program"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "rent",
+          "address": "SysvarRent111111111111111111111111111111111"
+        },
+        {
+          "name": "underlying_token_program"
+        }
+      ],
+      "args": [
+        {
+          "name": "partner_wallet",
+          "type": {
+            "option": "pubkey"
+          }
+        },
+        {
+          "name": "rift_name",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "name_len",
+          "type": "u8"
+        },
+        {
+          "name": "transfer_fee_bps",
+          "type": "u16"
+        }
+      ]
+    },
+    {
+      "name": "create_rift_with_vanity_pda",
+      "docs": [
+        "Create a new Rift with PDA-based vanity mint address (like pump.fun approach)",
+        "This generates the mint PDA deterministically from vanity seed",
+        "**MEMORY OPTIMIZATION**: Use fixed-size array instead of Vec to avoid heap allocation",
+        "**FIX HIGH #4**: Removed user-provided mint_bump parameter to prevent PDA bump grinding"
+      ],
+      "discriminator": [
+        125,
+        190,
+        7,
+        58,
+        45,
+        46,
+        153,
+        121
+      ],
+      "accounts": [
+        {
+          "name": "creator",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "rift",
+          "docs": [
+            "**CRITICAL SPACE FIX**: Use explicit Borsh size calculation",
+            "Option<Pubkey> = 33 bytes in Borsh (1 discriminant + 32 pubkey), not 32 from std::mem::size_of",
+            "4 Option<Pubkey> fields in current struct",
+            "Correct size: 8 (discriminator) + 774 (struct) = 782 bytes"
+          ],
+          "writable": true
+        },
+        {
+          "name": "underlying_mint"
+        },
+        {
+          "name": "rift_mint",
+          "docs": [
+            "The PDA-derived mint account for vanity address",
+            "**TOKEN-2022**: Manually initialized with transfer fee extension (0.7% on DEX trades)",
+            "**SECURITY NOTE #8**: Using UncheckedAccount because Token-2022 extensions require manual initialization.",
+            "This account is created via invoke_signed with proper validation (lines 189-233).",
+            "RISK: If manual initialization code has bugs, could create invalid/exploitable mints.",
+            "MITIGATION: Thoroughly tested initialization sequence, PDA derivation enforced by seeds.",
+            "**FIX HIGH #4**: Changed from user-provided bump to auto-derived canonical bump"
+          ],
+          "writable": true
+        },
+        {
+          "name": "rift_mint_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  105,
+                  102,
+                  116,
+                  95,
+                  109,
+                  105,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "rift"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault",
+          "docs": [
+            "**ATOMIC INIT**: Vault token account (initialized during create_rift_with_vanity_pda)"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "rift"
+              }
+            ]
+          }
+        },
+        {
+          "name": "fees_vault",
+          "docs": [
+            "**ATOMIC INIT**: Fees vault token account (initialized during create_rift_with_vanity_pda)"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  101,
+                  101,
+                  115,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "rift"
+              }
+            ]
+          }
+        },
+        {
+          "name": "withheld_vault",
+          "docs": [
+            "**ATOMIC INIT**: Withheld vault token account (initialized during create_rift_with_vanity_pda)"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  105,
+                  116,
+                  104,
+                  104,
+                  101,
+                  108,
+                  100,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "rift"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "rift"
+              }
+            ]
+          }
+        },
+        {
+          "name": "token_program"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "rent",
+          "address": "SysvarRent111111111111111111111111111111111"
+        },
+        {
+          "name": "underlying_token_program"
+        }
+      ],
+      "args": [
+        {
+          "name": "vanity_seed",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "seed_len",
+          "type": "u8"
+        },
+        {
+          "name": "partner_wallet",
+          "type": {
+            "option": "pubkey"
+          }
+        },
+        {
+          "name": "rift_name",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "name_len",
+          "type": "u8"
+        },
+        {
+          "name": "transfer_fee_bps",
+          "type": "u16"
+        }
+      ]
+    },
+    {
+      "name": "distribute_fees_from_vault",
+      "docs": [
+        "Admin function: Withdraw funds from vault (for buyback or emergency)",
+        "**HIGH FIX #2**: Creator, partner, treasury, or PROGRAM_AUTHORITY can call"
+      ],
+      "discriminator": [
+        92,
+        251,
+        58,
+        108,
+        90,
+        213,
+        238,
+        3
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "docs": [
+            "Fee payer (anyone can call)"
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "rift",
+          "writable": true
+        },
+        {
+          "name": "fees_vault",
+          "docs": [
+            "**FEE ROUTING UPDATE**: Fees vault holding collected wrap/unwrap fees (underlying tokens)"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  101,
+                  101,
+                  115,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "rift"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault_authority",
+          "docs": [
+            "Vault authority PDA - signs transfers from fees_vault"
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "rift"
+              }
+            ]
+          }
+        },
+        {
+          "name": "underlying_mint",
+          "docs": [
+            "Underlying mint (to validate treasury and partner accounts)"
+          ]
+        },
+        {
+          "name": "treasury_wallet",
+          "docs": [
+            "Treasury wallet that owns the treasury_account"
+          ]
+        },
+        {
+          "name": "treasury_account",
+          "docs": [
+            "Treasury token account (ATA - auto-created if needed)"
+          ],
+          "writable": true
+        },
+        {
+          "name": "partner_wallet",
+          "docs": [
+            "Partner wallet that owns the partner_account (optional)",
+            "this account MUST correspond to the same pubkey and its ATA must exist when",
+            "partner_amount > 0. The protocol assumes the partner ATA is pre-initialized",
+            "by either the partner or the admin flows."
+          ],
+          "optional": true
+        },
+        {
+          "name": "partner_account",
+          "docs": [
+            "Partner account (ATA - currently auto-created if needed). In practice,",
+            "for production deployments the ATA should be initialized ahead of time",
+            "via a dedicated admin/init instruction and `init_if_needed` can be removed",
+            "to avoid race conditions and unexpected payer charges."
+          ],
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "associated_token_program",
+          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "token_program"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "distribute_withheld_vault",
+      "docs": [
+        "**FEE MANAGEMENT**: Distribute withheld fees from withheld_vault",
+        "Creator, partner, treasury, or PROGRAM_AUTHORITY can call this",
+        "Splits RIFT tokens from withheld_vault to partner (50%) and treasury (50%)"
+      ],
+      "discriminator": [
+        92,
+        236,
+        64,
+        62,
+        111,
+        111,
+        14,
+        102
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "docs": [
+            "Fee payer (creator or treasury_wallet)"
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "rift",
+          "writable": true
+        },
+        {
+          "name": "withheld_vault",
+          "docs": [
+            "Withheld vault holding collected transfer fees (RIFT tokens)"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  105,
+                  116,
+                  104,
+                  104,
+                  101,
+                  108,
+                  100,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "rift"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault_authority",
+          "docs": [
+            "Vault authority PDA - signs transfers from withheld_vault"
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "rift"
+              }
+            ]
+          }
+        },
+        {
+          "name": "rift_mint",
+          "docs": [
+            "RIFT mint (to validate treasury and partner accounts)"
+          ]
+        },
+        {
+          "name": "treasury_wallet",
+          "docs": [
+            "Treasury wallet that owns the treasury_account"
+          ]
+        },
+        {
+          "name": "treasury_account",
+          "docs": [
+            "Treasury token account (ATA - auto-created if needed, holds RIFT tokens)"
+          ],
+          "writable": true
+        },
+        {
+          "name": "partner_wallet",
+          "docs": [
+            "Partner wallet that owns the partner_account (optional)",
+            "this account MUST correspond to the same pubkey and its ATA must exist when",
+            "partner_amount > 0. The protocol assumes the partner ATA is pre-initialized",
+            "by either the partner or the admin flows."
+          ],
+          "optional": true
+        },
+        {
+          "name": "partner_account",
+          "docs": [
+            "Partner account (ATA - currently auto-created if needed). In practice,",
+            "for production deployments the ATA should be initialized ahead of time",
+            "via a dedicated admin/init instruction and `init_if_needed` can be removed",
+            "to avoid race conditions and unexpected payer charges."
+          ],
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "associated_token_program",
+          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "token_program",
+          "docs": [
+            "**FIX CRITICAL #39**: Constrain token_program to Token-2022 only",
+            "Prevents malicious program from faking withheld vault distributions and draining funds"
+          ]
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "execute_oracle_change",
+      "docs": [
+        "**FIX ISSUE #5**: Execute pending oracle change after 24h delay",
+        "Step 2: Anyone can execute after delay has passed"
+      ],
+      "discriminator": [
+        110,
+        241,
+        50,
+        34,
+        170,
+        133,
+        182,
+        163
+      ],
+      "accounts": [
+        {
+          "name": "rift",
+          "writable": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "initialize_fees_vault",
+      "docs": [
+        "Initialize fees vault for collecting wrap/unwrap fees (underlying tokens)",
+        "Must be called after rift creation to enable fee collection",
+        "**FIX CRITICAL #19**: Manual initialization to properly size for Token-2022 extensions"
+      ],
+      "discriminator": [
+        9,
+        32,
+        121,
+        172,
+        59,
+        155,
+        246,
+        30
+      ],
+      "accounts": [
+        {
+          "name": "user",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "rift",
+          "writable": true
+        },
+        {
+          "name": "fees_vault",
+          "docs": [
+            "Fees vault token account (holds collected wrap/unwrap fees)",
+            "**FIX CRITICAL #19**: Manual initialization with proper Token-2022 extension sizing"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  101,
+                  101,
+                  115,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "rift"
+              }
+            ]
+          }
+        },
+        {
+          "name": "underlying_mint"
+        },
+        {
+          "name": "vault_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "rift"
+              }
+            ]
+          }
+        },
+        {
+          "name": "token_program",
+          "docs": [
+            "**FIX CRITICAL #34**: Constrain token_program to SPL Token or Token-2022 only"
+          ]
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "rent",
+          "address": "SysvarRent111111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "initialize_vault",
+      "docs": [
+        "Initialize vault for rift"
+      ],
+      "discriminator": [
+        48,
+        191,
+        163,
+        44,
+        71,
+        129,
+        63,
+        164
+      ],
+      "accounts": [
+        {
+          "name": "user",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "rift",
+          "writable": true
+        },
+        {
+          "name": "vault",
+          "docs": [
+            "Vault token account"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "rift"
+              }
+            ]
+          }
+        },
+        {
+          "name": "underlying_mint"
+        },
+        {
+          "name": "vault_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "rift"
+              }
+            ]
+          }
+        },
+        {
+          "name": "rift_mint_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  105,
+                  102,
+                  116,
+                  95,
+                  109,
+                  105,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "rift"
+              }
+            ]
+          }
+        },
+        {
+          "name": "token_program"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "rent",
+          "address": "SysvarRent111111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "initialize_withheld_vault",
+      "docs": [
+        "Initialize withheld vault for collecting SPL Token-2022 withheld transfer fees (RIFT tokens)",
+        "Must be called after rift creation to enable withheld fee collection",
+        "**FIX CRITICAL #20**: Manual initialization to properly size for Token-2022 extensions"
+      ],
+      "discriminator": [
+        53,
+        105,
+        233,
+        161,
+        88,
+        143,
+        209,
+        200
+      ],
+      "accounts": [
+        {
+          "name": "user",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "rift",
+          "writable": true
+        },
+        {
+          "name": "withheld_vault",
+          "docs": [
+            "Withheld vault token account (holds collected SPL Token-2022 withheld fees - RIFT tokens)",
+            "**FIX CRITICAL #20**: Manual initialization with proper Token-2022 extension sizing"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  105,
+                  116,
+                  104,
+                  104,
+                  101,
+                  108,
+                  100,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "rift"
+              }
+            ]
+          }
+        },
+        {
+          "name": "rift_mint"
+        },
+        {
+          "name": "vault_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "rift"
+              }
+            ]
+          }
+        },
+        {
+          "name": "token_program",
+          "docs": [
+            "**FIX CRITICAL #35**: Constrain token_program to Token-2022 only (RIFT mint is always Token-2022)"
+          ]
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "rent",
+          "address": "SysvarRent111111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "propose_oracle_change",
+      "docs": [
+        "**FIX ISSUE #5**: Propose oracle account change with 24h timelock",
+        "Step 1: Creator proposes new oracle accounts"
+      ],
+      "discriminator": [
+        189,
+        133,
+        250,
+        247,
+        37,
+        49,
+        177,
+        118
+      ],
+      "accounts": [
+        {
+          "name": "creator",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "rift",
+          "writable": true
+        }
+      ],
+      "args": [
+        {
+          "name": "switchboard_account",
+          "type": {
+            "option": "pubkey"
+          }
+        }
+      ]
+    },
+    {
+      "name": "set_oracle_accounts",
+      "docs": [
+        "**SECURITY FIX #50**: Set oracle account addresses (creator only)",
+        "This binds specific Switchboard accounts to the rift for validation"
+      ],
+      "discriminator": [
+        174,
+        106,
+        146,
+        87,
+        199,
+        228,
+        200,
+        208
+      ],
+      "accounts": [
+        {
+          "name": "creator",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "rift",
+          "writable": true
+        }
+      ],
+      "args": [
+        {
+          "name": "switchboard_account",
+          "type": {
+            "option": "pubkey"
+          }
+        }
+      ]
+    },
+    {
+      "name": "trigger_rebalance",
+      "docs": [
+        "Manual rebalance (can be called by anyone if conditions are met)"
+      ],
+      "discriminator": [
+        181,
+        25,
+        109,
+        223,
+        167,
+        184,
+        33,
+        209
+      ],
+      "accounts": [
+        {
+          "name": "user",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "rift",
+          "writable": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "unwrap_from_vault",
+      "docs": [
+        "Simple vault-based unwrap - burns RIFT and returns underlying from vault"
+      ],
+      "discriminator": [
+        212,
+        162,
+        229,
+        140,
+        73,
+        217,
+        245,
+        175
+      ],
+      "accounts": [
+        {
+          "name": "user",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "rift",
+          "writable": true
+        },
+        {
+          "name": "user_underlying",
+          "docs": [
+            "**SECURITY FIX #49**: User's underlying token account - validated manually in handler"
+          ],
+          "writable": true
+        },
+        {
+          "name": "user_rift_tokens",
+          "docs": [
+            "**SECURITY FIX #49**: User's RIFT token account - validated manually in handler"
+          ],
+          "writable": true
+        },
+        {
+          "name": "vault",
+          "docs": [
+            "**CRITICAL FIX - HIGH ISSUE #3**: Vault account type must support .amount and .reload()",
+            "Changed from UncheckedAccount to InterfaceAccount<TokenAccount> to fix compilation error"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "rift"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault_authority",
+          "docs": [
+            "Vault authority PDA (owns the vault, signs transfers from vault)"
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "rift"
+              }
+            ]
+          }
+        },
+        {
+          "name": "rift_mint_authority",
+          "docs": [
+            "Rift mint authority PDA (controls RIFT token minting/burning)"
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  105,
+                  102,
+                  116,
+                  95,
+                  109,
+                  105,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "rift"
+              }
+            ]
+          }
+        },
+        {
+          "name": "rift_mint",
+          "docs": [
+            "**SECURITY FIX #49**: RIFT mint (for burning)"
+          ],
+          "writable": true
+        },
+        {
+          "name": "fees_vault",
+          "docs": [
+            "Fees vault to collect unwrap fees (underlying tokens)"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  101,
+                  101,
+                  115,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "rift"
+              }
+            ]
+          }
+        },
+        {
+          "name": "underlying_token_program"
+        },
+        {
+          "name": "rift_token_program",
+          "docs": [
+            "**FIX CRITICAL #37**: Constrain rift_token_program to Token-2022 only",
+            "Prevents malicious program from faking burn operations and double-spending vault"
+          ]
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "rift_token_amount",
+          "type": "u64"
+        },
+        {
+          "name": "min_underlying_out",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "update_manual_oracle",
+      "docs": [
+        "**NEW**: Update oracle with manual price data (e.g., from Jupiter API)",
+        "Allows creator to update embedded oracle for tokens without Switchboard feeds",
+        "**HIGH FIX #3**: Rate limited to 1 update per hour with max 10% price change"
+      ],
+      "discriminator": [
+        247,
+        156,
+        190,
+        92,
+        105,
+        151,
+        63,
+        13
+      ],
+      "accounts": [
+        {
+          "name": "rift",
+          "writable": true
+        },
+        {
+          "name": "oracle_authority",
+          "docs": [
+            "Authority authorized to update oracle prices (must be creator)"
+          ],
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "price",
+          "type": "u64"
+        },
+        {
+          "name": "confidence",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "update_switchboard_oracle",
+      "docs": [
+        "**SECURITY FIX #4**: Update Switchboard oracle using SDK (prevents byte offset errors)",
+        "Uses switchboard-on-demand SDK for validated price parsing"
+      ],
+      "discriminator": [
+        3,
+        183,
+        18,
+        13,
+        82,
+        46,
+        108,
+        235
+      ],
+      "accounts": [
+        {
+          "name": "rift",
+          "writable": true
+        },
+        {
+          "name": "oracle_authority",
+          "docs": [
+            "**SECURITY FIX #50**: Authority authorized to update oracle prices (creator or governance)"
+          ],
+          "signer": true
+        },
+        {
+          "name": "switchboard_feed",
+          "docs": [
+            "**SECURITY FIX #50**: Switchboard aggregator feed - validated against rift.switchboard_feed_account"
+          ]
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "wrap_tokens",
+      "docs": [
+        "Simple vault-based wrap - deposits underlying tokens and mints RIFT tokens"
+      ],
+      "discriminator": [
+        244,
+        137,
+        57,
+        251,
+        232,
+        224,
+        54,
+        14
+      ],
+      "accounts": [
+        {
+          "name": "user",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "rift",
+          "writable": true
+        },
+        {
+          "name": "user_underlying",
+          "docs": [
+            "**SECURITY FIX #49**: User's underlying token account - validated manually in handler"
+          ],
+          "writable": true
+        },
+        {
+          "name": "user_rift_tokens",
+          "docs": [
+            "**SECURITY FIX #49**: User's RIFT token account - validated manually in handler"
+          ],
+          "writable": true
+        },
+        {
+          "name": "vault",
+          "docs": [
+            "**CRITICAL FIX - HIGH ISSUE #3**: Vault account type must support .amount and .reload()",
+            "Changed from UncheckedAccount to InterfaceAccount<TokenAccount> to fix compilation error"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "rift"
+              }
+            ]
+          }
+        },
+        {
+          "name": "rift_mint",
+          "docs": [
+            "**SECURITY FIX #49**: Validate rift mint matches rift state"
+          ],
+          "writable": true
+        },
+        {
+          "name": "rift_mint_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  105,
+                  102,
+                  116,
+                  95,
+                  109,
+                  105,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "rift"
+              }
+            ]
+          }
+        },
+        {
+          "name": "fees_vault",
+          "docs": [
+            "Fees vault to collect wrap fees (underlying tokens)"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  101,
+                  101,
+                  115,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "rift"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "rift"
+              }
+            ]
+          }
+        },
+        {
+          "name": "underlying_token_program"
+        },
+        {
+          "name": "rift_token_program",
+          "docs": [
+            "**FIX CRITICAL #36**: Constrain rift_token_program to Token-2022 only",
+            "Prevents malicious program from faking mint operations or using PDA signer to mint unauthorized tokens"
+          ]
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        },
+        {
+          "name": "min_rift_out",
+          "type": "u64"
+        }
+      ]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "Rift",
+      "discriminator": [
+        191,
+        145,
+        151,
+        37,
+        226,
+        141,
+        115,
+        173
+      ]
+    }
+  ],
+  "events": [
+    {
+      "name": "FeesCalculated",
+      "discriminator": [
+        224,
+        2,
+        105,
+        119,
+        225,
+        171,
+        26,
+        89
+      ]
+    },
+    {
+      "name": "FeesVaultWithdrawn",
+      "discriminator": [
+        237,
+        84,
+        131,
+        94,
+        208,
+        134,
+        82,
+        189
+      ]
+    },
+    {
+      "name": "OracleChangeExecuted",
+      "discriminator": [
+        178,
+        57,
+        109,
+        169,
+        250,
+        230,
+        177,
+        105
+      ]
+    },
+    {
+      "name": "OracleChangeProposed",
+      "discriminator": [
+        157,
+        226,
+        113,
+        87,
+        201,
+        38,
+        180,
+        183
+      ]
+    },
+    {
+      "name": "OraclePriceUpdated",
+      "discriminator": [
+        170,
+        138,
+        188,
+        200,
+        123,
+        50,
+        49,
+        104
+      ]
+    },
+    {
+      "name": "ReentrancyGuardReset",
+      "discriminator": [
+        243,
+        172,
+        4,
+        136,
+        10,
+        67,
+        126,
+        82
+      ]
+    },
+    {
+      "name": "RiftAdminClosed",
+      "discriminator": [
+        99,
+        146,
+        129,
+        216,
+        122,
+        193,
+        248,
+        187
+      ]
+    },
+    {
+      "name": "RiftClosed",
+      "discriminator": [
+        253,
+        18,
+        129,
+        98,
+        162,
+        23,
+        249,
+        107
+      ]
+    },
+    {
+      "name": "RiftCreated",
+      "discriminator": [
+        77,
+        132,
+        229,
+        95,
+        74,
+        142,
+        239,
+        243
+      ]
+    },
+    {
+      "name": "StuckAccountCleaned",
+      "discriminator": [
+        113,
+        131,
+        136,
+        141,
+        124,
+        197,
+        44,
+        62
+      ]
+    },
+    {
+      "name": "TokensWrapped",
+      "discriminator": [
+        25,
+        49,
+        38,
+        144,
+        135,
+        125,
+        102,
+        139
+      ]
+    },
+    {
+      "name": "TransferFeeUpdated",
+      "discriminator": [
+        57,
+        2,
+        237,
+        161,
+        155,
+        18,
+        22,
+        95
+      ]
+    },
+    {
+      "name": "UnwrapExecuted",
+      "discriminator": [
+        187,
+        130,
+        91,
+        90,
+        17,
+        189,
+        211,
+        28
+      ]
+    },
+    {
+      "name": "WithheldFeesClaimed",
+      "discriminator": [
+        236,
+        101,
+        1,
+        187,
+        122,
+        13,
+        192,
+        204
+      ]
+    },
+    {
+      "name": "WithheldFeesDistributed",
+      "discriminator": [
+        139,
+        187,
+        81,
+        255,
+        192,
+        74,
+        11,
+        241
+      ]
+    },
+    {
+      "name": "WithheldVaultWithdrawn",
+      "discriminator": [
+        143,
+        129,
+        138,
+        146,
+        51,
+        124,
+        15,
+        154
+      ]
+    },
+    {
+      "name": "WrapAndPoolCreated",
+      "discriminator": [
+        97,
+        24,
+        242,
+        114,
+        107,
+        1,
+        10,
+        198
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "InvalidAccountData",
+      "msg": "Invalid account data"
+    },
+    {
+      "code": 6001,
+      "name": "InvalidPartnerFee",
+      "msg": "Invalid partner fee (max 5%)"
+    },
+    {
+      "code": 6002,
+      "name": "InvalidTradingFee",
+      "msg": "Invalid trading fee (max 1%)"
+    },
+    {
+      "code": 6003,
+      "name": "InvalidTransferFee",
+      "msg": "Invalid transfer fee (must be 0.7%-1% = 70-100 basis points)"
+    },
+    {
+      "code": 6004,
+      "name": "InvalidRiftName",
+      "msg": "Rift name must end with '_RIFT' or 'RIFT'"
+    },
+    {
+      "code": 6005,
+      "name": "NameTooLong",
+      "msg": "Rift name too long (max 32 chars)"
+    },
+    {
+      "code": 6006,
+      "name": "InvalidVanityAddress",
+      "msg": "Invalid vanity address - must end with 'rift'"
+    },
+    {
+      "code": 6007,
+      "name": "RebalanceTooSoon",
+      "msg": "Rebalance called too soon"
+    },
+    {
+      "code": 6008,
+      "name": "OraclePriceTooStale",
+      "msg": "Oracle price too stale"
+    },
+    {
+      "code": 6009,
+      "name": "InsufficientArbitrageOpportunity",
+      "msg": "Insufficient arbitrage opportunity"
+    },
+    {
+      "code": 6010,
+      "name": "UnauthorizedClose",
+      "msg": "Unauthorized to close this rift"
+    },
+    {
+      "code": 6011,
+      "name": "UnauthorizedAdmin",
+      "msg": "Unauthorized admin action"
+    },
+    {
+      "code": 6012,
+      "name": "VaultNotEmpty",
+      "msg": "Vault must be empty before closing"
+    },
+    {
+      "code": 6013,
+      "name": "InvalidStuckAccount",
+      "msg": "Invalid stuck account - does not match expected PDA"
+    },
+    {
+      "code": 6014,
+      "name": "RiftAlreadyExists",
+      "msg": "Rift already exists - not a stuck account"
+    },
+    {
+      "code": 6015,
+      "name": "MathOverflow",
+      "msg": "Math overflow"
+    },
+    {
+      "code": 6016,
+      "name": "InvalidAmount",
+      "msg": "Invalid amount"
+    },
+    {
+      "code": 6017,
+      "name": "InvalidBackingRatio",
+      "msg": "Invalid backing ratio"
+    },
+    {
+      "code": 6018,
+      "name": "UnauthorizedOracle",
+      "msg": "Unauthorized oracle"
+    },
+    {
+      "code": 6019,
+      "name": "InvalidPrice",
+      "msg": "Invalid price"
+    },
+    {
+      "code": 6020,
+      "name": "InvalidConfidence",
+      "msg": "Invalid confidence"
+    },
+    {
+      "code": 6021,
+      "name": "InvalidFeeAmount",
+      "msg": "Invalid fee amount"
+    },
+    {
+      "code": 6022,
+      "name": "InsufficientRentExemption",
+      "msg": "Insufficient rent exemption for account creation"
+    },
+    {
+      "code": 6023,
+      "name": "InvalidProgramId",
+      "msg": "Invalid program ID in cross-program invocation"
+    },
+    {
+      "code": 6024,
+      "name": "InvalidSeedComponent",
+      "msg": "Invalid seed component in PDA derivation"
+    },
+    {
+      "code": 6025,
+      "name": "InvalidPartnerVault",
+      "msg": "Partner vault owner or mint validation failed"
+    },
+    {
+      "code": 6026,
+      "name": "InsufficientAccounts",
+      "msg": "Insufficient accounts provided"
+    },
+    {
+      "code": 6027,
+      "name": "InvalidInputData",
+      "msg": "Invalid input data provided"
+    },
+    {
+      "code": 6028,
+      "name": "OracleRegistryStale",
+      "msg": "Oracle registry is stale"
+    },
+    {
+      "code": 6029,
+      "name": "EmptyOracleRegistry",
+      "msg": "Oracle registry is empty"
+    },
+    {
+      "code": 6030,
+      "name": "ReentrancyDetected",
+      "msg": "Reentrancy attack detected"
+    },
+    {
+      "code": 6031,
+      "name": "VaultNotInitialized",
+      "msg": "Vault not properly initialized"
+    },
+    {
+      "code": 6032,
+      "name": "AmountTooLarge",
+      "msg": "Amount too large for safe processing"
+    },
+    {
+      "code": 6033,
+      "name": "AmountTooSmall",
+      "msg": "Amount too small for fee calculation"
+    },
+    {
+      "code": 6034,
+      "name": "InvalidVaultAuthority",
+      "msg": "Invalid vault authority provided"
+    },
+    {
+      "code": 6035,
+      "name": "BackingRatioTooLarge",
+      "msg": "Backing ratio too large"
+    },
+    {
+      "code": 6036,
+      "name": "FeeTooSmall",
+      "msg": "Fee too small for amount"
+    },
+    {
+      "code": 6037,
+      "name": "MintAmountTooSmall",
+      "msg": "Mint amount too small"
+    },
+    {
+      "code": 6038,
+      "name": "MintAmountTooLarge",
+      "msg": "Mint amount too large"
+    },
+    {
+      "code": 6039,
+      "name": "InvalidOraclePrice",
+      "msg": "Invalid oracle price"
+    },
+    {
+      "code": 6040,
+      "name": "OraclePriceTooLarge",
+      "msg": "Oracle price too large"
+    },
+    {
+      "code": 6041,
+      "name": "InsufficientFees",
+      "msg": "Insufficient fees available - would drain backing reserves"
+    },
+    {
+      "code": 6042,
+      "name": "InvalidOracleInterval",
+      "msg": "Invalid oracle interval"
+    },
+    {
+      "code": 6043,
+      "name": "InvalidRebalanceThreshold",
+      "msg": "Invalid rebalance threshold"
+    },
+    {
+      "code": 6044,
+      "name": "InsufficientOracles",
+      "msg": "Insufficient oracle responses"
+    },
+    {
+      "code": 6045,
+      "name": "MissingPartnerVault",
+      "msg": "Partner vault account is missing"
+    },
+    {
+      "code": 6046,
+      "name": "InsufficientFunds",
+      "msg": "Insufficient funds in vault"
+    },
+    {
+      "code": 6047,
+      "name": "InvalidVanitySeed",
+      "msg": "Invalid vanity seed - must be 32 bytes or less"
+    },
+    {
+      "code": 6048,
+      "name": "InvalidMintPDA",
+      "msg": "Invalid mint PDA - derivation mismatch"
+    },
+    {
+      "code": 6049,
+      "name": "InvalidMintBump",
+      "msg": "Invalid mint bump - derivation mismatch"
+    },
+    {
+      "code": 6050,
+      "name": "InvalidPublicKey",
+      "msg": "Invalid public key format"
+    },
+    {
+      "code": 6051,
+      "name": "UnauthorizedOracleUpdate",
+      "msg": "Unauthorized oracle update - only rift creator can update oracle prices"
+    },
+    {
+      "code": 6052,
+      "name": "InvalidOracleAccount",
+      "msg": "Invalid oracle account - insufficient size or invalid owner"
+    },
+    {
+      "code": 6053,
+      "name": "InvalidMintAuthority",
+      "msg": "Invalid mint authority - mint authority does not match expected PDA"
+    },
+    {
+      "code": 6054,
+      "name": "InvalidTimestamp",
+      "msg": "Invalid timestamp - too far in future or past"
+    },
+    {
+      "code": 6055,
+      "name": "InvalidOracleParameters",
+      "msg": "Invalid oracle parameters - interval or threshold out of bounds"
+    },
+    {
+      "code": 6056,
+      "name": "Unauthorized",
+      "msg": "Unauthorized access"
+    },
+    {
+      "code": 6057,
+      "name": "InvalidByteSlice",
+      "msg": "Invalid byte slice conversion"
+    },
+    {
+      "code": 6058,
+      "name": "InvalidMint",
+      "msg": "Invalid mint - does not match rift state"
+    },
+    {
+      "code": 6059,
+      "name": "InvalidVault",
+      "msg": "Invalid vault - does not match rift state"
+    },
+    {
+      "code": 6060,
+      "name": "UnauthorizedTokenAccount",
+      "msg": "Unauthorized token account - owner mismatch"
+    },
+    {
+      "code": 6061,
+      "name": "OracleAccountNotSet",
+      "msg": "Oracle account not set - must call set_oracle_accounts first"
+    },
+    {
+      "code": 6062,
+      "name": "SlippageExceeded",
+      "msg": "Slippage exceeded - actual output less than minimum required"
+    },
+    {
+      "code": 6063,
+      "name": "OracleAccountMismatch",
+      "msg": "Oracle account mismatch - provided account does not match stored oracle account"
+    },
+    {
+      "code": 6064,
+      "name": "InvalidOracleOwner",
+      "msg": "Invalid oracle owner - oracle account not owned by Switchboard program"
+    },
+    {
+      "code": 6065,
+      "name": "InvalidOracleData",
+      "msg": "Invalid oracle data - account data too small or malformed"
+    },
+    {
+      "code": 6066,
+      "name": "OraclePriceStale",
+      "msg": "Oracle price stale - price data older than maximum allowed age"
+    },
+    {
+      "code": 6067,
+      "name": "OracleConfidenceTooLow",
+      "msg": "Oracle confidence too low - confidence interval too large relative to price"
+    },
+    {
+      "code": 6068,
+      "name": "InvalidOracleExponent",
+      "msg": "Invalid oracle exponent - exponent outside acceptable range"
+    },
+    {
+      "code": 6069,
+      "name": "InvalidTokenAccount",
+      "msg": "Invalid token account data"
+    },
+    {
+      "code": 6070,
+      "name": "TreasuryNotSet",
+      "msg": "Treasury wallet not set - must set treasury first"
+    },
+    {
+      "code": 6071,
+      "name": "InvalidTreasuryVault",
+      "msg": "Invalid treasury vault - owner does not match treasury wallet"
+    },
+    {
+      "code": 6072,
+      "name": "OracleUpdateTooFrequent",
+      "msg": "Oracle update too frequent - must wait at least 1 hour between manual updates"
+    },
+    {
+      "code": 6073,
+      "name": "OracleCumulativeDriftTooLarge",
+      "msg": "Oracle cumulative drift too large - max 30% drift within 7 days"
+    },
+    {
+      "code": 6074,
+      "name": "OraclePriceChangeTooLarge",
+      "msg": "Oracle price change too large - max 10% change per update"
+    },
+    {
+      "code": 6075,
+      "name": "LiquidityPoolNotInitialized",
+      "msg": "Liquidity pool not initialized - staking requires active pool"
+    },
+    {
+      "code": 6076,
+      "name": "InvalidStakingVault",
+      "msg": "Invalid staking vault - must be program-controlled PDA"
+    },
+    {
+      "code": 6077,
+      "name": "FeesVaultNotEmpty",
+      "msg": "Fees vault is not empty - distribute fees before closing rift"
+    },
+    {
+      "code": 6078,
+      "name": "WithheldVaultNotEmpty",
+      "msg": "Withheld vault is not empty - distribute withheld fees before closing rift"
+    },
+    {
+      "code": 6079,
+      "name": "InvalidFeesVault",
+      "msg": "Invalid fees vault - does not match rift state"
+    },
+    {
+      "code": 6080,
+      "name": "InvalidWithheldVault",
+      "msg": "Invalid withheld vault - does not match rift state"
+    },
+    {
+      "code": 6081,
+      "name": "ExcessiveTransferFee",
+      "msg": "Underlying token transfer fee exceeds 1% - transaction rejected for user protection"
+    },
+    {
+      "code": 6082,
+      "name": "BackingRatioTooStale",
+      "msg": "Backing ratio too stale - last rebalance was more than 24 hours ago"
+    },
+    {
+      "code": 6083,
+      "name": "InvalidPDA",
+      "msg": "Invalid PDA derivation - computed address does not match provided account"
+    },
+    {
+      "code": 6084,
+      "name": "UnsafeUnderlyingMint",
+      "msg": "Unsafe underlying mint - mint has freeze authority that could lock vault funds"
+    },
+    {
+      "code": 6085,
+      "name": "TransferFeeConfigMismatch",
+      "msg": "Transfer fee config mismatch - actual on-chain fee does not match parameter"
+    },
+    {
+      "code": 6086,
+      "name": "RiftClosed",
+      "msg": "Rift has been closed by admin"
+    },
+    {
+      "code": 6087,
+      "name": "PartnerWalletNotSet",
+      "msg": "Partner wallet not set"
+    },
+    {
+      "code": 6088,
+      "name": "NoOracleChangePending",
+      "msg": "No oracle change pending"
+    },
+    {
+      "code": 6089,
+      "name": "OracleChangeDelayNotMet",
+      "msg": "Oracle change delay not met (24h required)"
+    },
+    {
+      "code": 6090,
+      "name": "MissingPartnerAccount",
+      "msg": "Partner account is required when partner_amount > 0"
+    }
+  ],
+  "types": [
+    {
+      "name": "FeesCalculated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "rift",
+            "type": "pubkey"
+          },
+          {
+            "name": "treasury_amount",
+            "type": "u64"
+          },
+          {
+            "name": "fee_collector_amount",
+            "type": "u64"
+          },
+          {
+            "name": "partner_amount",
+            "type": "u64"
+          },
+          {
+            "name": "burn_amount",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "FeesVaultWithdrawn",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "rift",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "treasury",
+            "type": "pubkey"
+          },
+          {
+            "name": "authority",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "OracleChangeExecuted",
+      "docs": [
+        "**FIX ISSUE #5**: Event emitted when oracle change is executed"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "rift",
+            "type": "pubkey"
+          },
+          {
+            "name": "switchboard_account",
+            "type": {
+              "option": "pubkey"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "OracleChangeProposed",
+      "docs": [
+        "**FIX ISSUE #5**: Event emitted when oracle change is proposed"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "rift",
+            "type": "pubkey"
+          },
+          {
+            "name": "switchboard_account",
+            "type": {
+              "option": "pubkey"
+            }
+          },
+          {
+            "name": "effective_time",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "OraclePriceUpdated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "rift",
+            "type": "pubkey"
+          },
+          {
+            "name": "oracle_type",
+            "type": {
+              "defined": {
+                "name": "OracleType"
+              }
+            }
+          },
+          {
+            "name": "price",
+            "type": "u64"
+          },
+          {
+            "name": "confidence",
+            "type": "u64"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "OracleType",
+      "docs": [
+        "**SECURITY FIX #50**: Oracle type enum for event emission"
+      ],
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "Switchboard"
+          },
+          {
+            "name": "Manual"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PriceData",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "price",
+            "type": "u64"
+          },
+          {
+            "name": "confidence",
+            "type": "u64"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ReentrancyGuardReset",
+      "docs": [
+        "**FIX HIGH #1**: Event emitted when reentrancy guard is reset by admin"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "rift",
+            "type": "pubkey"
+          },
+          {
+            "name": "authority",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Rift",
+      "docs": [
+        "Core accounting invariants:",
+        "- `total_underlying_wrapped` tracks the amount of underlying tokens that back RIFT in circulation",
+        "(after fees are siphoned into `fees_vault`). It should match the net backing held in `vault`,",
+        "adjusted for any protocol-defined fees that have already been moved out of the main vault.",
+        "- `total_rift_minted` tracks the total amount of RIFT ever minted minus burned, independent of",
+        "*where* those tokens currently live (user wallet, vault, treasury, withheld vault, etc.).",
+        "- `total_fees_collected` is used to account for fees that belong to the protocol and are held",
+        "in `fees_vault` / `withheld_vault`. It should never be decremented when fees are merely",
+        "moved between internal protocol-controlled accounts."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "name",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "creator",
+            "type": "pubkey"
+          },
+          {
+            "name": "underlying_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "rift_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "vault",
+            "type": "pubkey"
+          },
+          {
+            "name": "fees_vault",
+            "type": "pubkey"
+          },
+          {
+            "name": "withheld_vault",
+            "type": "pubkey"
+          },
+          {
+            "name": "partner_fee_bps",
+            "type": "u16"
+          },
+          {
+            "name": "partner_wallet",
+            "type": {
+              "option": "pubkey"
+            }
+          },
+          {
+            "name": "treasury_wallet",
+            "type": {
+              "option": "pubkey"
+            }
+          },
+          {
+            "name": "wrap_fee_bps",
+            "docs": [
+              "**MEDIUM FIX #11**: Configurable wrap/unwrap fees (default 30 bps = 0.3%)"
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "unwrap_fee_bps",
+            "type": "u16"
+          },
+          {
+            "name": "total_underlying_wrapped",
+            "docs": [
+              "**SECURITY FIX**: Separate accounting units to prevent mix-ups"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "total_rift_minted",
+            "type": "u64"
+          },
+          {
+            "name": "total_burned",
+            "type": "u64"
+          },
+          {
+            "name": "backing_ratio",
+            "type": "u64"
+          },
+          {
+            "name": "last_rebalance",
+            "type": "i64"
+          },
+          {
+            "name": "created_at",
+            "type": "i64"
+          },
+          {
+            "name": "oracle_prices",
+            "type": {
+              "array": [
+                {
+                  "defined": {
+                    "name": "PriceData"
+                  }
+                },
+                10
+              ]
+            }
+          },
+          {
+            "name": "price_index",
+            "type": "u8"
+          },
+          {
+            "name": "oracle_update_interval",
+            "type": "i64"
+          },
+          {
+            "name": "max_rebalance_interval",
+            "type": "i64"
+          },
+          {
+            "name": "arbitrage_threshold_bps",
+            "type": "u16"
+          },
+          {
+            "name": "last_oracle_update",
+            "type": "i64"
+          },
+          {
+            "name": "total_volume_24h",
+            "type": "u64"
+          },
+          {
+            "name": "price_deviation",
+            "type": "u64"
+          },
+          {
+            "name": "arbitrage_opportunity_bps",
+            "type": "u16"
+          },
+          {
+            "name": "rebalance_count",
+            "type": "u32"
+          },
+          {
+            "name": "total_fees_collected",
+            "type": "u64"
+          },
+          {
+            "name": "rifts_tokens_distributed",
+            "type": "u64"
+          },
+          {
+            "name": "rifts_tokens_burned",
+            "type": "u64"
+          },
+          {
+            "name": "switchboard_feed_account",
+            "docs": [
+              "**SECURITY FIX #50**: Store oracle account addresses for validation"
+            ],
+            "type": {
+              "option": "pubkey"
+            }
+          },
+          {
+            "name": "last_manual_oracle_update",
+            "type": "i64"
+          },
+          {
+            "name": "manual_oracle_base_price",
+            "type": "u64"
+          },
+          {
+            "name": "manual_oracle_drift_window_start",
+            "type": "i64"
+          },
+          {
+            "name": "reentrancy_guard",
+            "type": "bool"
+          },
+          {
+            "name": "reentrancy_guard_slot",
+            "type": "u64"
+          },
+          {
+            "name": "is_closed",
+            "type": "bool"
+          },
+          {
+            "name": "closed_at_slot",
+            "type": "u64"
+          },
+          {
+            "name": "oracle_change_pending",
+            "type": "bool"
+          },
+          {
+            "name": "pending_switchboard_account",
+            "type": {
+              "option": "pubkey"
+            }
+          },
+          {
+            "name": "oracle_change_timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "RiftAdminClosed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "rift",
+            "type": "pubkey"
+          },
+          {
+            "name": "original_creator",
+            "type": "pubkey"
+          },
+          {
+            "name": "admin",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "RiftClosed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "rift",
+            "type": "pubkey"
+          },
+          {
+            "name": "creator",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "RiftCreated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "rift",
+            "type": "pubkey"
+          },
+          {
+            "name": "creator",
+            "type": "pubkey"
+          },
+          {
+            "name": "underlying_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "partner_fee_bps",
+            "type": "u16"
+          }
+        ]
+      }
+    },
+    {
+      "name": "StuckAccountCleaned",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "creator",
+            "type": "pubkey"
+          },
+          {
+            "name": "stuck_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "underlying_mint",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "TokensWrapped",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "rift",
+            "type": "pubkey"
+          },
+          {
+            "name": "user",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount_in",
+            "type": "u64"
+          },
+          {
+            "name": "fee_paid",
+            "type": "u64"
+          },
+          {
+            "name": "rift_tokens_minted",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "TransferFeeUpdated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "rift",
+            "type": "pubkey"
+          },
+          {
+            "name": "new_fee_bps",
+            "type": "u16"
+          },
+          {
+            "name": "authority",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "UnwrapExecuted",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "rift",
+            "type": "pubkey"
+          },
+          {
+            "name": "user",
+            "type": "pubkey"
+          },
+          {
+            "name": "rift_token_amount",
+            "type": "u64"
+          },
+          {
+            "name": "fee_amount",
+            "type": "u64"
+          },
+          {
+            "name": "underlying_returned",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "WithheldFeesClaimed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "rift",
+            "type": "pubkey"
+          },
+          {
+            "name": "destination",
+            "type": "pubkey"
+          },
+          {
+            "name": "source_account",
+            "type": "pubkey"
+          },
+          {
+            "name": "claimer",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "WithheldFeesDistributed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "rift",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "treasury_amount",
+            "type": "u64"
+          },
+          {
+            "name": "partner_amount",
+            "type": "u64"
+          },
+          {
+            "name": "distributor",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "WithheldVaultWithdrawn",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "rift",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "treasury",
+            "type": "pubkey"
+          },
+          {
+            "name": "authority",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "WrapAndPoolCreated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "rift",
+            "type": "pubkey"
+          },
+          {
+            "name": "user",
+            "type": "pubkey"
+          },
+          {
+            "name": "underlying_amount",
+            "type": "u64"
+          },
+          {
+            "name": "fee_amount",
+            "type": "u64"
+          },
+          {
+            "name": "tokens_minted",
+            "type": "u64"
+          },
+          {
+            "name": "pool_underlying",
+            "type": "u64"
+          },
+          {
+            "name": "pool_rift",
+            "type": "u64"
+          },
+          {
+            "name": "lp_tokens_minted",
+            "type": "u64"
+          },
+          {
+            "name": "trading_fee_bps",
+            "type": "u16"
+          }
+        ]
+      }
+    }
+  ]
+}

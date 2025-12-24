@@ -1,0 +1,1096 @@
+// lib/solana/rifts-service.ts - Production-Ready Rifts Service
+import { Connection, PublicKey, Transaction, ComputeBudgetProgram, SystemProgram, TransactionInstruction, AccountMeta, SYSVAR_RENT_PUBKEY, Keypair } from '@solana/web3.js';
+import { AccountLayout, TOKEN_PROGRAM_ID, getAssociatedTokenAddress, createAssociatedTokenAccountInstruction, createSyncNativeInstruction, NATIVE_MINT } from '@solana/spl-token';
+import { productionJupiterOracle } from './jupiter-oracle';
+import { ProductionRiftsTokenManager } from './rifts-token-manager';
+import BN from 'bn.js';
+import { supabase } from '@/lib/supabase/client';
+
+export const RIFTS_PROGRAM_ID = new PublicKey(process.env.NEXT_PUBLIC_RIFTS_PROGRAM_ID || '6FEZJKsxbDm5W4Ad4eogNehivRKKGCHJHRnKUSFbLpKt'); // ✅ RIFTS PROGRAM - MAINNET
+
+// Blacklisted rifts that should never be prefetched (broken/problematic rifts)
+const BLACKLISTED_RIFTS = [
+  'DHK2razVoP3WfMgeumLaUKf3wtfy9jTBhiFhAaJhZf2',
+  'gddfsrLWuigXeA5kqMHognrRvRs1C28tyemuYDiiZR3',
+  'Qv393sNS6Ed7qvhbDKXHifS8t3u8pXU4t8XCU9kYD4N'
+];
+
+export interface WalletAdapter {
+  publicKey: PublicKey | null;
+  sendTransaction: (transaction: Transaction, connection: Connection) => Promise<string>;
+  signTransaction: (transaction: Transaction) => Promise<Transaction>;
+}
+
+interface DecodedRiftData {
+  name?: string;
+  creator: string;
+  underlyingMint: string;
+  riftMint: string;
+  vault: string;
+  treasuryWallet?: string;
+  partnerWallet?: string;
+  burnFee: number;
+  partnerFee: number;
+  totalWrapped: bigint;
+  totalBurned: bigint;
+  backingRatio: bigint;
+  lastRebalance: bigint;
+  createdAt: bigint;
+  oracleUpdateInterval: bigint;
+  maxRebalanceInterval: bigint;
+  arbitrageThresholdBps: number;
+  lastOracleUpdate: bigint;
+  totalVolume24h: bigint;
+  priceDeviation: bigint;
+  arbitrageOpportunityBps: number;
+  rebalanceCount: number;
+  totalFeesCollected: bigint;
+  riftsTokensDistributed: bigint;
+  riftsTokensBurned: bigint;
+}
+
+export interface ProductionRiftData {
+  id: string;
+  symbol: string;
+  underlying: string;
+  strategy: string;
+  apy: number;
+  tvl: number;
+  volume24h: number;
+  risk: 'Very Low' | 'Low' | 'Medium' | 'High';
+  backingRatio: number;
+  burnFee: number;
+  partnerFee: number;
+  creator: string;
+  treasuryWallet?: string;
+  partnerWallet?: string;
+  underlyingMint: string;
+  riftMint: string;
+  vault: string;
+  totalWrapped: string;
+  totalBurned: string;
+  createdAt: Date;
+  lastRebalance: Date;
+  arbitrageOpportunity: number;
+  oracleCountdown: number;
+  nextRebalance: number;
+  performance: number[];
+  realVaultBalance: number;
+  realRiftSupply: number;
+  realBackingRatio: number;
+  priceDeviation: number;
+  volumeTriggerActive: boolean;
+  participants: number;
+  oracleStatus: 'active' | 'degraded' | 'inactive';
+  hasMeteoraPool?: boolean;
+  meteoraPoolTVL?: number;
+  liquidityPool?: string; // Primary Meteora pool address for trading (backward compatibility)
+  meteoraPool?: string; // Alias for liquidityPool for backward compatibility
+  meteoraPools?: string[]; // Array of ALL Meteora pool addresses for this rift
+  positionNftMint?: string; // Position NFT mint address for Meteora pool
+  meteoraPoolType?: 'SOL' | 'RIFTS'; // Type of the primary pool (SOL/rRIFTS or RIFTS/rRIFTS)
+  solPool?: string; // SOL/rRIFTS pool address
+  riftsPool?: string; // RIFTS/rRIFTS pool address
+  name?: string;
+  address?: string;
+  image?: string;
+  liquidity?: number;
+  price?: number;
+  change24h?: number;
+  isActive?: boolean;
+  lastArbitrageCheck?: Date;
+  volume?: number;
+  holdersCount?: number;
+  riftsCount?: number;
+  riftTokenPrice?: number;
+  underlyingTokenPrice?: number;
+  totalSupply?: number;
+  circulatingSupply?: number;
+  burnAmount?: number;
+  marketCap?: number;
+  isLoading?: boolean;
+  riftMintPubkey?: string;
+}
+
+export class ProductionRiftsService {
+  private connection: Connection;
+  private wallet: WalletAdapter | null = null;
+  private riftsTokenManager: ProductionRiftsTokenManager;
+  private priceUpdateInterval: NodeJS.Timeout | null = null;
+  private volumeCallbacks: ((riftId: string, volume: number) => void)[] = [];
+  
+  // Volume tracking for 24h calculations
+  private volumeTracker: { [riftId: string]: Array<{volume: number, timestamp: number}> } = {};
+  
+  // Participant tracking for unique user counting
+  private participantTracker: { [riftId: string]: Set<string> } = {};
+
+  // Mint info cache for faster decimal lookups
+  private mintInfoCache: { [mintAddress: string]: { decimals: number, timestamp: number } } = {};
+  private readonly MINT_CACHE_TTL = 60 * 60 * 1000; // 1 hour cache
+
+  // Cache to prevent RPC rate limiting
+  private riftsCache: ProductionRiftData[] = [];
+  private lastCacheUpdate: number = 0;
+  private CACHE_DURATION_MS = 30000; // Cache for 30 seconds
+  private isLoadingRifts: boolean = false;
+  
+  // Aggressive rate limiting for RPC calls
+  private lastRpcCall: number = 0;
+  private readonly MIN_RPC_INTERVAL = 1000; // 1 second between RPC calls
+  private rpcCallQueue: Array<() => Promise<unknown>> = [];
+  private isProcessingQueue = false;
+
+  constructor(connection: Connection) {
+    this.connection = connection;
+    this.riftsTokenManager = new ProductionRiftsTokenManager(connection);
+    // Disabled automatic updates to prevent initialization errors
+    // this.startProductionPriceUpdates();
+
+    // Load volume tracking data from Supabase on initialization
+    this.loadVolumeTracking().catch(err => console.error('[VOLUME] Failed to load tracking data:', err));
+  }
+
+  // Load volume tracking data from Supabase
+  private async loadVolumeTracking(): Promise<void> {
+    try {
+      const { data: volumes, error } = await supabase
+        .from('rift_volumes')
+        .select('*')
+        .gte('timestamp', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString());
+
+      if (error) {
+//         console.log('[VOLUME] No historical volume data found');
+        return;
+      }
+
+      if (volumes) {
+        volumes.forEach((vol: any) => {
+          if (!this.volumeTracker[vol.rift_id]) {
+            this.volumeTracker[vol.rift_id] = [];
+          }
+          this.volumeTracker[vol.rift_id].push({
+            volume: parseFloat(vol.volume),
+            timestamp: new Date(vol.timestamp).getTime()
+          });
+        });
+      }
+    } catch (error) {
+      // Volume table may not exist yet, skipping load
+    }
+  }
+
+  // Save volume tracking data to Supabase (non-blocking)
+  private saveVolumeTracking(riftId: string, volume: number, timestamp: number): void {
+    // Fire-and-forget - don't await to avoid blocking wrap operations
+    fetch('/api/track-volume', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        riftId,
+        tokenAmount: volume.toString(),
+        usdValue: 0,
+        transactionType: 'tracked',
+        signature: null
+      })
+    }).catch(error => {
+      // Silently fail if API call fails - volume tracking is not critical
+//       console.debug('[VOLUME-TRACKING] Failed (non-critical):', error);
+    });
+  }
+
+  // Update TVL in background after transaction confirms (non-blocking)
+  private async updateTvlInBackground(riftId: string, amount: number, type: 'wrap' | 'unwrap'): Promise<void> {
+    try {
+      const riftPubkey = new PublicKey(riftId);
+      const riftData = await this.getRiftData(riftPubkey);
+      if (!riftData) return;
+
+      // Get token price
+      let tokenPrice = 1;
+      try {
+        tokenPrice = await this.getTokenPrice(riftData.underlyingMint);
+      } catch {
+        // Use default price of 1 if fetch fails
+      }
+
+      // Calculate TVL delta (negative for unwrap)
+      const tvlDelta = type === 'unwrap' ? -(amount * tokenPrice) : (amount * tokenPrice);
+
+      // Update TVL via API
+      await fetch('/api/update-tvl', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          riftId,
+          tvlDelta,
+          tokenPrice,
+          tokenAmount: amount
+        })
+      });
+    } catch (error) {
+//       console.debug(`[${type.toUpperCase()}] Background TVL update failed:`, error);
+    }
+  }
+
+  // Invalidate cache to force immediate refresh
+  private invalidateCache(): void {
+    this.riftsCache = [];
+    this.lastCacheUpdate = 0;
+  }
+
+  // Add a rift directly to cache (bypass RPC delays)
+  public addRiftToCache(riftData: ProductionRiftData): void {
+    this.riftsCache = [...this.riftsCache, riftData];
+    this.lastCacheUpdate = Date.now();
+  }
+
+  // Update a rift in cache with new data
+  public updateRiftInCache(riftId: string, updates: Partial<ProductionRiftData>): void {
+    const foundRift = this.riftsCache.find(r => r.id === riftId || r.address === riftId);
+    if (foundRift) {
+      // Update existing rift
+      this.riftsCache = this.riftsCache.map(rift =>
+        rift.id === riftId || rift.address === riftId ? { ...rift, ...updates } : rift
+      );
+    } else {
+      // Rift not in cache - create a minimal entry with the updates
+      // This ensures Position NFT and pool data are preserved even if cache is empty
+      const placeholderRift: any = {
+        id: riftId,
+        address: riftId,
+        ...updates
+      };
+      this.riftsCache.push(placeholderRift);
+    }
+
+    // IMPORTANT: Persist Position NFT data to localStorage for cross-session access
+    if (updates.positionNftMint || updates.meteoraPool || updates.meteoraPools) {
+      try {
+        const storageKey = `rift_metadata_${riftId}`;
+        const existingData = typeof window !== 'undefined' ? localStorage.getItem(storageKey) : null;
+        const metadata = existingData ? JSON.parse(existingData) : {};
+
+        const updatedMetadata = {
+          ...metadata,
+          ...updates,
+          cachedAt: Date.now() // Add timestamp for cache expiration
+        };
+        if (typeof window !== 'undefined') {
+          localStorage.setItem(storageKey, JSON.stringify(updatedMetadata));
+        }
+      } catch (error) {
+
+      }
+    }
+
+    this.lastCacheUpdate = Date.now();
+  }
+
+  // Get Position NFT metadata from localStorage
+  private getPositionNftFromLocalStorage(riftId: string): { meteoraPool?: string; meteoraPools?: string[]; positionNftMint?: string; hasMeteoraPool?: boolean; cachedAt?: number } | null {
+    try {
+      const storageKey = `rift_metadata_${riftId}`;
+      if (typeof window !== 'undefined') {
+        const existingData = localStorage.getItem(storageKey);
+        if (existingData) {
+          return JSON.parse(existingData);
+        }
+      }
+    } catch (error) {
+
+    }
+    return null;
+  }
+
+  // Queue-based RPC call system to prevent rate limiting
+  private async rateLimitedRpcCall<T>(rpcCall: () => Promise<T>): Promise<T> {
+    return new Promise((resolve, reject) => {
+      this.rpcCallQueue.push(async () => {
+        try {
+          const result = await rpcCall();
+          resolve(result);
+        } catch (error) {
+          reject(error);
+        }
+      });
+      
+      if (!this.isProcessingQueue) {
+        this.processRpcQueue();
+      }
+    });
+  }
+  
+  // Helper method for better transaction confirmation
+  private async confirmTransactionSafely(signature: string, skipWait: boolean = false): Promise<boolean> {
+    try {
+      // If skipWait is true, just check status immediately without blocking
+      if (skipWait) {
+        const status = await this.connection.getSignatureStatus(signature);
+        if (status?.value?.confirmationStatus) {
+          return true;
+        }
+        return true; // Assume success if sent
+      }
+
+      // Get latest blockhash for newer confirmation API with short timeout
+      const latestBlockhash = await this.connection.getLatestBlockhash('processed');
+
+      // Use processed commitment and short timeout
+      const timeout = 10000; // 10 second timeout instead of default 60s
+      const confirmPromise = this.connection.confirmTransaction({
+        signature,
+        blockhash: latestBlockhash.blockhash,
+        lastValidBlockHeight: latestBlockhash.lastValidBlockHeight
+      }, 'processed');
+
+      // Race between confirmation and timeout
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Confirmation timeout')), timeout)
+      );
+
+      await Promise.race([confirmPromise, timeoutPromise]);
+      return true;
+    } catch (confirmError) {
+      // Quick status check without waiting
+      const status = await this.connection.getSignatureStatus(signature);
+
+      if (status?.value?.confirmationStatus === 'confirmed' ||
+          status?.value?.confirmationStatus === 'finalized' ||
+          status?.value?.confirmationStatus === 'processed') {
+        return true;
+      } else if (status?.value?.err) {
+
+        throw new Error(`Transaction failed: ${JSON.stringify(status.value.err)}`);
+      } else {
+        // Transaction is still processing, assume it will succeed
+        return true;
+      }
+    }
+  }
+
+  private async processRpcQueue(): Promise<void> {
+    if (this.isProcessingQueue || this.rpcCallQueue.length === 0) {
+      return;
+    }
+    
+    this.isProcessingQueue = true;
+    
+    while (this.rpcCallQueue.length > 0) {
+      const call = this.rpcCallQueue.shift();
+      if (call) {
+        try {
+          await call();
+        } catch (error) {
+
+        }
+        
+        // Wait before next call
+        await new Promise(resolve => setTimeout(resolve, this.MIN_RPC_INTERVAL));
+      }
+    }
+    
+    this.isProcessingQueue = false;
+  }
+
+  setWallet(wallet: WalletAdapter) {
+    this.wallet = wallet;
+  }
+
+  // Stop all automatic updates
+  stopUpdates() {
+    if (this.priceUpdateInterval) {
+      clearInterval(this.priceUpdateInterval);
+      this.priceUpdateInterval = null;
+    }
+  }
+
+  // Start production price monitoring and rebalancing
+  private startProductionPriceUpdates() {
+    this.priceUpdateInterval = setInterval(async () => {
+      try {
+        await this.checkAllRiftsForRebalancing();
+      } catch (error) {
+
+      }
+    }, 300000); // Check every 5 minutes to avoid rate limits
+  }
+
+  // Check all rifts for rebalancing opportunities
+  private async checkAllRiftsForRebalancing() {
+    try {
+      const rifts = await this.getAllRifts();
+      
+      for (const rift of rifts) {
+        await this.checkRiftRebalancing(rift);
+      }
+    } catch (error) {
+
+    }
+  }
+
+  // Check individual rift for rebalancing
+  private async checkRiftRebalancing(rift: ProductionRiftData) {
+    try {
+      const arbitrageData = await productionJupiterOracle.detectArbitrage({
+        underlyingMint: rift.underlyingMint,
+        riftMint: rift.riftMint,
+        volumeTriggerThreshold: 0.07, // 7% volume spike
+        priceDeviationThreshold: 0.02 // 2% price deviation
+      });
+
+      if (arbitrageData.shouldRebalance) {
+        await this.executeAutomaticRebalance(rift, arbitrageData);
+      }
+    } catch (error) {
+
+    }
+  }
+
+  // Execute automatic rebalance (fetches live price from Jupiter)
+  private async executeAutomaticRebalance(
+    rift: ProductionRiftData,
+    arbitrageData: unknown
+  ) {
+    try {
+      if (!this.wallet) {
+        return;
+      }
+
+      // Update oracle price on-chain (fetches live price from Jupiter automatically)
+      await this.updateOraclePrice({
+        riftPubkey: new PublicKey(rift.id),
+        underlyingMint: rift.underlyingMint
+      });
+
+      // Trigger rebalance
+      await this.triggerRebalance(new PublicKey(rift.id));
+    } catch (error) {
+
+    }
+  }
+
+  // Vanity address pool for instant rift creation
+  private static vanityAddressPool: Array<{ keypair: Keypair; address: string }> = [];
+  private static isGeneratingPool = false;
+  private static readonly POOL_TARGET_SIZE = 10; // Keep 10 addresses ready
+  private static readonly POOL_REFILL_THRESHOLD = 3; // Start refilling when below 3
+
+  // Background worker to generate vanity addresses
+  private static async generateVanityAddressPool() {
+    if (this.isGeneratingPool) return;
+    this.isGeneratingPool = true;
+
+    while (this.vanityAddressPool.length < this.POOL_TARGET_SIZE) {
+      const result = await this.generateSingleVanityAddress();
+      if (result) {
+        this.vanityAddressPool.push(result);
+      }
+    }
+
+    this.isGeneratingPool = false;
+  }
+
+  // Generate a single vanity address using the accelerator
+  private static async generateSingleVanityAddress(): Promise<{ keypair: Keypair; address: string } | null> {
+    try {
+      // Use Web Worker acceleration if available (browser)
+      if (typeof window !== 'undefined' && typeof Worker !== 'undefined') {
+        const { vanityAccelerator } = await import('../vanity-accelerator');
+        const result = await vanityAccelerator.generateVanityAddress('rift');
+
+        if (result) {
+          return {
+            keypair: result.keypair,
+            address: result.address
+          };
+        }
+      }
+
+      // Fallback to single-threaded generation (server-side or unsupported browsers)
+      const maxAttempts = 5000000; // Reduced for fallback
+
+      for (let attempt = 0; attempt < maxAttempts; attempt++) {
+        const keypair = Keypair.generate();
+        const address = keypair.publicKey.toBase58();
+
+        if (address.toLowerCase().endsWith('rift')) {
+          return { keypair, address };
+        }
+
+        // Yield control occasionally
+        if (attempt % 50000 === 0 && attempt > 0) {
+          await new Promise(resolve => setTimeout(resolve, 0));
+        }
+      }
+
+      return null;
+    } catch (error) {
+
+      return null;
+    }
+  }
+
+  // Get a vanity address from server pool (instant!)
+  private async getVanityRiftAddressFromServer(): Promise<{ keypair: Keypair; address: string } | null> {
+    try {
+      const response = await fetch('/api/vanity-pool', {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' }
+      });
+
+      if (!response.ok) {
+        return null;
+      }
+
+      const data = await response.json();
+
+      // Reconstruct keypair from array
+      const keypair = Keypair.fromSecretKey(new Uint8Array(data.keypair));
+
+      return {
+        keypair,
+        address: data.address
+      };
+
+    } catch (error) {
+      return null;
+    }
+  }
+
+  // Get a vanity address from local pool (instant!)
+  private getVanityRiftAddressFromLocalPool(): { keypair: Keypair; address: string } | null {
+    const result = ProductionRiftsService.vanityAddressPool.shift() || null;
+
+    if (result) {
+      // Trigger refill if running low
+      if (ProductionRiftsService.vanityAddressPool.length <= ProductionRiftsService.POOL_REFILL_THRESHOLD) {
+        ProductionRiftsService.generateVanityAddressPool().catch(console.error);
+      }
+    }
+
+    return result;
+  }
+
+  // Initialize pool on first use
+  private async ensurePoolInitialized() {
+    if (ProductionRiftsService.vanityAddressPool.length === 0 && !ProductionRiftsService.isGeneratingPool) {
+      ProductionRiftsService.generateVanityAddressPool().catch(console.error);
+    }
+  }
+
+  // Pool management methods
+  static getPoolStatus() {
+    return {
+      poolSize: this.vanityAddressPool.length,
+      targetSize: this.POOL_TARGET_SIZE,
+      isGenerating: this.isGeneratingPool,
+      refillThreshold: this.POOL_REFILL_THRESHOLD,
+      addresses: this.vanityAddressPool.map(item => item.address)
+    };
+  }
+
+  static async forcePoolRefill() {
+    return this.generateVanityAddressPool();
+  }
+
+  static clearPool() {
+    this.vanityAddressPool = [];
+  }
+
+  // Pre-warm the pool (call this when app starts)
+  static async preWarmPool() {
+    return this.generateVanityAddressPool();
+  }
+
+  // NEW: Create rift with PDA-based vanity address (like pump.fun)
+  async createRiftWithVanityPDA(params: {
+    creator: PublicKey;
+    underlyingMint: PublicKey;
+    burnFeeBps: number;
+    partnerFeeBps: number;
+    partnerWallet?: PublicKey;
+    riftName?: string;
+  }): Promise<{
+    success: boolean;
+    signature?: string;
+    riftId?: string;
+    riftMintAddress?: string;
+    error?: string;
+  }> {
+    const { creator } = params;
+
+    console.log('[CREATE-RIFT] Starting with params:', {
+      creator: creator.toBase58(),
+      underlyingMint: params.underlyingMint.toBase58(),
+      burnFeeBps: params.burnFeeBps,
+      partnerFeeBps: params.partnerFeeBps,
+      partnerWallet: params.partnerWallet?.toBase58(),
+      riftName: params.riftName,
+      programId: RIFTS_PROGRAM_ID.toBase58()
+    });
+
+    try {
+      if (!this.wallet || !this.wallet.publicKey) {
+        throw new Error('Wallet not connected');
+      }
+
+//       console.log('[CREATE-RIFT] Wallet connected:', this.wallet.publicKey.toBase58());
+
+      // TEMPORARY: Skip API pool and generate client-side directly
+      // This ensures we use the correct program ID
+
+      let vanityResult = null;
+
+      // Generate PDA client-side
+      {
+        const { VanityPDAGenerator } = await import('../vanity-pda-generator');
+
+//         console.log('[CREATE-RIFT] Generating vanity PDA...');
+        // Just generate ANY PDA immediately (no pattern requirement)
+        vanityResult = await VanityPDAGenerator.generateVanityPDA(
+          creator,
+          params.underlyingMint,
+          '', // No pattern - instant generation
+          100 // Just 100 attempts - basically instant
+        );
+      }
+
+      if (!vanityResult) {
+        throw new Error('Could not generate any PDA');
+      }
+
+      const { mintPDA, mintBump, vanitySeed } = vanityResult;
+      console.log('[CREATE-RIFT] Generated PDA:', {
+        mintPDA: mintPDA.toBase58(),
+        mintBump,
+        vanitySeedHex: vanitySeed.toString('hex')
+      });
+
+      // Calculate rift PDA (account address) - now includes vanity seed for uniqueness
+      const [riftPDA] = PublicKey.findProgramAddressSync(
+        [Buffer.from("rift"), params.underlyingMint.toBuffer(), creator.toBuffer(), vanitySeed],
+        RIFTS_PROGRAM_ID
+      );
+
+//       console.log('[CREATE-RIFT] Rift PDA:', riftPDA.toBase58());
+
+      // Create the instruction using PDA approach
+      const instruction = await this.createRiftWithVanityPDAInstruction({
+        riftPDA,
+        riftMintPDA: mintPDA,
+        riftMintBump: mintBump,
+        vanitySeed,
+        creator,
+        underlyingMint: params.underlyingMint,
+        burnFeeBps: params.burnFeeBps,
+        partnerFeeBps: params.partnerFeeBps,
+        partnerWallet: params.partnerWallet,
+        riftName: params.riftName
+      });
+
+      if (!instruction) {
+        throw new Error('Failed to create vanity PDA instruction');
+      }
+
+//       console.log('[CREATE-RIFT] Instruction created with', instruction.keys.length, 'accounts');
+      instruction.keys.forEach((key, idx) => {
+//         console.log(`  [${idx}] ${key.pubkey.toBase58()} - signer:${key.isSigner}, writable:${key.isWritable}`);
+      });
+
+      // Create and send transaction - ONLY WALLET SIGNS!
+      const transaction = new Transaction().add(instruction);
+      if (!this.wallet.publicKey) {
+        throw new Error('Wallet not connected');
+      }
+      transaction.feePayer = this.wallet.publicKey;
+
+      const { blockhash } = await this.connection.getLatestBlockhash();
+      transaction.recentBlockhash = blockhash;
+
+      console.log('[CREATE-RIFT] Transaction prepared:', {
+        feePayer: transaction.feePayer.toBase58(),
+        blockhash,
+        instructionCount: transaction.instructions.length
+      });
+
+      // Simple single-signer transaction!
+      let signature: string;
+
+      try {
+        // Skip simulation - send directly to get real blockchain error
+//         console.log('[CREATE-RIFT] Sending transaction...');
+        signature = await this.wallet.sendTransaction(transaction, this.connection);
+//         console.log('[CREATE-RIFT] Transaction sent:', signature);
+      } catch (error) {
+        console.error('[CREATE-RIFT] Transaction error:', error);
+        throw error;
+      }
+
+      // Don't wait for confirmation - move on immediately
+      await this.confirmTransactionSafely(signature, true);
+
+      // Save to Supabase immediately for instant display
+      const newRiftData: ProductionRiftData = {
+        id: riftPDA.toBase58(),
+        address: riftPDA.toBase58(),
+        symbol: params.riftName || 'RIFT',
+        underlying: params.riftName || 'RIFT',
+        strategy: 'Volatility Farming',
+        apy: 0,
+        tvl: 0,
+        volume24h: 0,
+        risk: 'Medium' as const,
+        backingRatio: 100,
+        burnFee: Math.floor(params.burnFeeBps / 100),
+        partnerFee: Math.floor(params.partnerFeeBps / 100),
+        creator: params.creator.toBase58(),
+        underlyingMint: params.underlyingMint.toBase58(),
+        riftMint: mintPDA.toBase58(),
+        vault: '',
+        totalWrapped: '0',
+        totalBurned: '0',
+        createdAt: new Date(),
+        lastRebalance: new Date(),
+        arbitrageOpportunity: 0,
+        oracleCountdown: 0,
+        nextRebalance: 0,
+        performance: [],
+        realVaultBalance: 0,
+        realRiftSupply: 0,
+        realBackingRatio: 100,
+        priceDeviation: 0,
+        volumeTriggerActive: false,
+        participants: 0,
+        oracleStatus: 'active' as const
+      };
+
+      await this.saveRiftsToSupabase([newRiftData]);
+
+      return {
+        success: true,
+        signature,
+        riftId: riftPDA.toBase58(),
+        riftMintAddress: mintPDA.toBase58()
+      };
+
+    } catch (error) {
+
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      };
+    }
+  }
+
+  // LEGACY: Create rift with vanity address ending in "rift" (external keypair approach)
+  async createRiftWithVanityAddress(params: {
+    creator: PublicKey;
+    underlyingMint: PublicKey;
+    burnFeeBps: number;
+    partnerFeeBps: number;
+    partnerWallet?: PublicKey;
+    riftName?: string;
+  }): Promise<{
+    success: boolean;
+    signature?: string;
+    riftId?: string;
+    riftMintAddress?: string;
+    error?: string;
+  }> {
+    const { creator } = params;
+
+    try {
+      if (!this.wallet) {
+        throw new Error('Wallet not connected');
+      }
+
+      // Try server pool first (pre-generated addresses)
+      let vanityResult = await this.getVanityRiftAddressFromServer();
+
+      // Fallback to local pool if server unavailable
+      if (!vanityResult) {
+        await this.ensurePoolInitialized();
+        vanityResult = this.getVanityRiftAddressFromLocalPool();
+      }
+
+      // Final fallback to real-time generation
+      if (!vanityResult) {
+        vanityResult = await ProductionRiftsService.generateSingleVanityAddress();
+        if (!vanityResult) {
+          throw new Error('Could not generate vanity address ending with "rift"');
+        }
+      }
+
+      const { keypair: riftMintKeypair, address: riftMintAddress } = vanityResult;
+
+      // Calculate rift PDA (account address)
+      const [riftPDA] = PublicKey.findProgramAddressSync(
+        [Buffer.from("rift"), params.underlyingMint.toBuffer(), creator.toBuffer()],
+        RIFTS_PROGRAM_ID
+      );
+
+      // Create the instruction using createRiftWithVanityMint
+      const instruction = await this.createRiftWithVanityMintInstruction({
+        riftPDA,
+        riftMintKeypair,
+        creator,
+        underlyingMint: params.underlyingMint,
+        burnFeeBps: params.burnFeeBps,
+        partnerFeeBps: params.partnerFeeBps,
+        partnerWallet: params.partnerWallet,
+        riftName: params.riftName
+      });
+
+      if (!instruction) {
+        throw new Error('Failed to create vanity rift instruction');
+      }
+
+      // Create and send transaction
+      const transaction = new Transaction().add(instruction);
+      if (!this.wallet.publicKey) {
+        throw new Error('Wallet not connected');
+      }
+      transaction.feePayer = this.wallet.publicKey;
+
+      const { blockhash } = await this.connection.getLatestBlockhash();
+      transaction.recentBlockhash = blockhash;
+
+      // Create a fresh transaction to avoid signature conflicts
+      const freshTransaction = new Transaction().add(instruction);
+      freshTransaction.feePayer = this.wallet.publicKey;
+      freshTransaction.recentBlockhash = blockhash;
+
+      let signature: string;
+
+      try {
+        // connection.sendTransaction() requires ALL signers, but we can't provide the wallet keypair
+        // So we need to skip this method and go directly to wallet signing
+        throw new Error('sendTransaction requires wallet keypair - skipping to wallet methods');
+      } catch (error) {
+        // Last resort: Use wallet.signAndSendTransaction directly
+        if (typeof (this.wallet as any).signAndSendTransaction === 'function') {
+          // Create completely fresh transaction for wallet
+          const walletTx = new Transaction();
+          walletTx.add(instruction);
+          walletTx.feePayer = this.wallet.publicKey;
+          walletTx.recentBlockhash = blockhash;
+
+          // Sign our part first
+          walletTx.partialSign(riftMintKeypair);
+
+          // Let wallet handle the rest
+          const result = await (this.wallet as any).signAndSendTransaction(walletTx);
+          signature = result.signature;
+        } else {
+          // Manual approach as absolute fallback
+          const manualTx = new Transaction();
+          manualTx.add(instruction);
+          manualTx.feePayer = this.wallet.publicKey;
+          manualTx.recentBlockhash = blockhash;
+
+          // Sign with our keypair
+          manualTx.sign(riftMintKeypair);
+
+          // Sign with wallet
+          const signed = await this.wallet.signTransaction(manualTx);
+
+          // Send raw transaction
+          signature = await this.connection.sendRawTransaction(signed.serialize());
+        }
+      }
+
+      // Confirm transaction
+      const confirmation = await this.confirmTransactionSafely(signature);
+      if (!confirmation) {
+        throw new Error('Transaction confirmation failed');
+      }
+
+      // Add to cache
+      const vaultPDA = PublicKey.findProgramAddressSync(
+        [Buffer.from("vault"), riftPDA.toBuffer()],
+        RIFTS_PROGRAM_ID
+      )[0];
+
+      const newRiftData: ProductionRiftData = {
+        id: riftPDA.toBase58(),
+        riftMint: riftMintAddress,
+        underlyingMint: params.underlyingMint.toBase58(),
+        vault: vaultPDA.toBase58(),
+        symbol: `r${params.riftName || 'SOL'}`,
+        underlying: params.riftName || 'SOL',
+        strategy: 'Hybrid Oracle Arbitrage',
+        apy: 12.5,
+        tvl: 0,
+        volume24h: 0,
+        risk: 'Low' as const,
+        backingRatio: 1,
+        burnFee: params.burnFeeBps,
+        partnerFee: params.partnerFeeBps,
+        creator: params.creator.toBase58(),
+        totalWrapped: '0',
+        totalBurned: '0',
+        createdAt: new Date(),
+        lastRebalance: new Date(),
+        arbitrageOpportunity: 0,
+        oracleCountdown: 3600,
+        nextRebalance: Date.now() + (24 * 60 * 60 * 1000),
+        performance: [12.5],
+        realVaultBalance: 0,
+        realRiftSupply: 0,
+        realBackingRatio: 1,
+        priceDeviation: 0,
+        volumeTriggerActive: false,
+        participants: 0,
+        oracleStatus: 'active'
+      };
+
+      // Save to Supabase immediately for instant display
+      await this.saveRiftsToSupabase([newRiftData]);
+
+      return {
+        success: true,
+        signature,
+        riftId: riftPDA.toBase58(),
+        riftMintAddress
+      };
+
+    } catch (error) {
+
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to create vanity rift'
+      };
+    }
+  }
+
+  // Create new rift with production-ready features
+  async createRift(params: {
+    creator: PublicKey;
+    underlyingMint: PublicKey;
+    burnFeeBps: number;
+    partnerFeeBps: number;
+    partnerWallet?: PublicKey;
+  }): Promise<{
+    success: boolean;
+    signature?: string;
+    riftId?: string;
+    error?: string;
+  }> {
+    const { creator } = params;
+    
+    try {
+      if (!this.wallet) {
+        throw new Error('Wallet not connected');
+      }
+      
+      if (!this.wallet.publicKey) {
+        throw new Error('Wallet public key not available');
+      }
+
+      const programStatus = await this.checkProgramStatus();
+
+      if (!programStatus.exists || !programStatus.executable) {
+        throw new Error(`Program ${RIFTS_PROGRAM_ID.toBase58()} is not properly deployed`);
+      }
+
+      // Ensure we're not using default public keys
+      const defaultPubkey = PublicKey.default.toBase58();
+      if (params.underlyingMint.toBase58() === defaultPubkey) {
+        throw new Error('Invalid underlying mint: cannot be default public key');
+      }
+      if (creator.toBase58() === defaultPubkey) {
+        throw new Error('Invalid creator: cannot be default public key');
+      }
+
+      // Check if rift already exists
+      const [riftPDA] = PublicKey.findProgramAddressSync(
+        [Buffer.from("rift"), params.underlyingMint.toBuffer(), creator.toBuffer()],
+        RIFTS_PROGRAM_ID
+      );
+
+      const existingRift = await this.connection.getAccountInfo(riftPDA);
+
+      // Check all related PDAs that might already exist
+      // Updated to match new program seeds: [b"rift_mint", underlying_mint, creator]
+      const [existingRiftMintPDA] = PublicKey.findProgramAddressSync(
+        [Buffer.from("rift_mint"), params.underlyingMint.toBuffer(), creator.toBuffer()],
+        RIFTS_PROGRAM_ID
+      );
+      const existingRiftMint = await this.connection.getAccountInfo(existingRiftMintPDA);
+
+      if (existingRiftMint) {
+        // Continue with creation - let the program handle the conflict
+      }
+
+      if (existingRift && existingRift.data.length > 0) {
+        // Skip rift creation, go directly to adding liquidity
+
+        // Calculate vault PDA properly
+        const [vaultPDA] = PublicKey.findProgramAddressSync(
+          [Buffer.from("vault"), riftPDA.toBuffer()],
+          RIFTS_PROGRAM_ID
+        );
+
+        // Calculate rift mint PDA properly
+        const [riftMintPDA] = PublicKey.findProgramAddressSync(
+          [Buffer.from("rift_mint"), params.underlyingMint.toBuffer(), creator.toBuffer()],
+          RIFTS_PROGRAM_ID
+        );
+
+        const riftData: ProductionRiftData = {
+          id: riftPDA.toBase58(),
+          symbol: 'rSOL',
+          underlying: 'SOL',
+          strategy: 'Hybrid Oracle Arbitrage',
+          apy: 12.5,
+          tvl: 0,
+          volume24h: 0,
+          risk: 'Low' as const,
+          backingRatio: 1,
+          burnFee: params.burnFeeBps,
+          partnerFee: params.partnerFeeBps,
+          creator: creator.toBase58(),
+          underlyingMint: params.underlyingMint.toBase58(),
+          riftMint: riftMintPDA.toBase58(),
+          vault: vaultPDA.toBase58(),
+          totalWrapped: '0',
+          totalBurned: '0',
+          createdAt: new Date(),
+          lastRebalance: new Date(),
+          arbitrageOpportunity: 0,
+          oracleCountdown: 3600,
+          nextRebalance: Date.now() + (24 * 60 * 60 * 1000),
+          performance: [12.5],
+          realVaultBalance: 0,
+          realRiftSupply: 0,
+          realBackingRatio: 1,
+          priceDeviation: 0,
+          volumeTriggerActive: false,
+          participants: 0,
+          oracleStatus: 'active'
+        };
+
+        // Add to cache immediately
+        this.addRiftToCache(riftData);
+
+        // Don't add liquidity automatically - leave it for step 2
+
+        return {
+          success: true,
+          riftId: riftPDA.toBase58()
+        };
+      }
+
+      const transaction = await this.createRiftInstruction(
+        creator,
+        params.underlyingMint,
+        params.burnFeeBps,
+        params.partnerFeeBps,
+        params.partnerWallet
+      );
+      
+      // Add production optimizations
+      transaction.add(
+        ComputeBudgetProgram.setComputeUnitLimit({ units: 400000 }),
+        ComputeBudgetProgram.setComputeUnitPrice({ micr

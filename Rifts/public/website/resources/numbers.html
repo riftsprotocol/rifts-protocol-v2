@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <style>
+        @import url('https://fonts.cdnfonts.com/css/gordita');
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            background: transparent;
+        }
+        
+        .contador {
+            font-size: 120px;
+            font-weight: 500;
+            color: #55B88D;
+            font-family: 'Gordita Medium', sans-serif;
+            text-align: center;
+            margin: 0;
+            padding: 0;
+            letter-spacing: -2px;
+        }
+        
+        .contenedor {
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: transparent;
+            gap: 40px;
+            flex-wrap: wrap;
+            padding: 40px 20px;
+        }
+        
+        .metric-box {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-width: 180px;
+            flex: 1;
+            max-width: 280px;
+            opacity: 0;
+            transform: translateY(30px);
+            transition: all 0.8s ease-out;
+        }
+        
+        .metric-box.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+        
+        .metric-box:nth-child(1) { transition-delay: 0.1s; }
+        .metric-box:nth-child(2) { transition-delay: 0.2s; }
+        .metric-box:nth-child(3) { transition-delay: 0.3s; }
+        .metric-box:nth-child(4) { transition-delay: 0.4s; }
+        
+        .numero {
+            font-size: clamp(48px, 5vw, 64px);
+            font-weight: 600;
+            color: #55B88D;
+            font-family: 'Gordita Medium', 'Inter', sans-serif;
+            margin-bottom: 8px;
+            letter-spacing: -1px;
+            text-align: center;
+            opacity: 0;
+            transform: scale(0.8);
+            transition: all 0.6s ease-out 0.3s;
+        }
+        
+        .metric-box.visible .numero {
+            opacity: 1;
+            transform: scale(1);
+        }
+        
+        .texto {
+            font-size: 14px;
+            color: #ffffff;
+            font-family: 'Inter', sans-serif;
+            font-weight: 400;
+            text-align: center;
+            text-transform: lowercase;
+            letter-spacing: 0.3px;
+            line-height: 1.3;
+            opacity: 0;
+            transform: translateY(10px);
+            transition: all 0.5s ease-out 0.5s;
+        }
+        
+        .metric-box.visible .texto {
+            opacity: 1;
+            transform: translateY(0);
+        }
+        
+        /* Media Queries para responsividad */
+        @media (max-width: 1200px) {
+            .contenedor {
+                gap: 30px;
+            }
+            .metric-box {
+                min-width: 160px;
+            }
+        }
+        
+        @media (max-width: 768px) {
+            .contenedor {
+                gap: 25px;
+                padding: 30px 15px;
+            }
+            .metric-box {
+                min-width: 140px;
+                max-width: 200px;
+            }
+            .numero {
+                font-size: clamp(36px, 8vw, 48px);
+            }
+            .texto {
+                font-size: 13px;
+            }
+        }
+        
+        @media (max-width: 480px) {
+            .contenedor {
+                gap: 20px;
+                padding: 20px 10px;
+            }
+            .metric-box {
+                min-width: 120px;
+                max-width: 150px;
+            }
+            .numero {
+                font-size: clamp(28px, 10vw, 36px);
+            }
+            .texto {
+                font-size: 12px;
+            }
+        }
+
+        /* Fallback para fuentes */
+        @font-face {
+            font-family: 'Gordita Medium';
+            src: local('Arial'), local('Helvetica');
+            font-weight: 500;
+        }
+    </style>
+</head>
+<body>
+    <div class="contenedor">
+        <!-- Total Value Locked -->
+        <div class="metric-box">
+            <div id="contador1" class="numero"></div>
+            <div class="texto">Total value locked</div>
+        </div>
+        
+        <!-- Active Users -->
+        <div class="metric-box">
+            <div id="contador2" class="numero"></div>
+            <div class="texto">Active users</div>
+        </div>
+        
+        <!-- Average APY -->
+        <div class="metric-box">
+            <div id="contador3" class="numero"></div>
+            <div class="texto">Average apy</div>
+        </div>
+        
+        <!-- 24h Volume -->
+        <div class="metric-box">
+            <div id="contador4" class="numero"></div>
+            <div class="texto">24h volume</div>
+        </div>
+    </div>
+
+    <script>
+        class ContadorAnimado {
+            constructor(elemento, valorFinal, duracion = 2000, formato = 'numero') {
+                this.elemento = elemento;
+                this.valorFinal = this.extraerNumero(valorFinal);
+                this.duracion = duracion;
+                this.iniciado = false;
+                this.observador = null;
+                this.formato = formato;
+                this.prefijo = valorFinal.includes('') ? '' : '';
+                this.sufijo = valorFinal.includes('%') ? '%' : '';
+                this.valorOriginal = valorFinal;
+            }
+
+            extraerNumero(texto) {
+                const match = texto.match(/(\d+(?:\.\d+)?)([MK]?)/);
+                if (!match) return 0;
+                
+                let numero = parseFloat(match[1]);
+                const sufijo = match[2];
+                
+                if (sufijo === 'M') numero *= 1000000;
+                if (sufijo === 'K') numero *= 1000;
+                
+                return numero;
+            }
+
+            formatearNumero(numero) {
+                if (this.formato === 'porcentaje') {
+                    return this.prefijo + numero.toFixed(1) + this.sufijo;
+                }
+                
+                if (this.formato === 'dolares') {
+                    if (numero >= 1000000) {
+                        return this.prefijo + (numero / 1000000).toFixed(0) + 'M';
+                    }
+                    if (numero >= 1000) {
+                        return this.prefijo + (numero / 1000).toFixed(0) + 'K';
+                    }
+                    return this.prefijo + numero.toFixed(0);
+                }
+                
+                // Formato normal
+                if (numero >= 1000000) {
+                    return (numero / 1000000).toFixed(0) + 'M';
+                }
+                if (numero >= 1000) {
+                    return (numero / 1000).toFixed(0) + 'K';
+                }
+                return numero.toFixed(0);
+            }
+
+            animar() {
+                if (this.iniciado) return;
+                this.iniciado = true;
+
+                const inicio = 0;
+                const incremento = this.valorFinal / (this.duracion / 16);
+                let current = inicio;
+
+                const animarFrame = () => {
+                    current += incremento;
+                    if (current >= this.valorFinal) {
+                        current = this.valorFinal;
+                        // Para el volumen, mostrar el valor final exacto (900K)
+                        if (this.valorOriginal === '$900K') {
+                            this.elemento.textContent = '$900K';
+                        } else {
+                            this.elemento.textContent = this.formatearNumero(current);
+                        }
+                        return;
+                    }
+                    
+                    this.elemento.textContent = this.formatearNumero(current);
+                    requestAnimationFrame(animarFrame);
+                };
+
+                animarFrame();
+            }
+
+            observar() {
+                this.observador = new IntersectionObserver((entries) => {
+                    entries.forEach(entry => {
+                        if (entry.isIntersecting) {
+                            // Primero hacemos visible el contenedor
+                            const metricBox = this.elemento.closest('.metric-box');
+                            metricBox.classList.add('visible');
+                            
+                            // Luego iniciamos la animación del número después de un delay
+                            setTimeout(() => this.animar(), 600);
+                            this.observador.unobserve(this.elemento);
+                        }
+                    });
+                }, { threshold: 0.1 });
+
+                this.observador.observe(this.elemento);
+            }
+
+            iniciar() {
+                this.observar();
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            // Total Value Locked - 100M
+            const contador1 = new ContadorAnimado(
+                document.getElementById('contador1'), 
+                '100M', 
+                1800,
+                'numero'
+            );
+            contador1.iniciar();
+
+            // Active Users - 554
+            const contador2 = new ContadorAnimado(
+                document.getElementById('contador2'), 
+                '554', 
+                1200,
+                'numero'
+            );
+            contador2.iniciar();
+
+            // Average APY - 12.5%
+            const contador3 = new ContadorAnimado(
+                document.getElementById('contador3'), 
+                '12.5%', 
+                1600,
+                'porcentaje'
+            );
+            contador3.iniciar();
+
+            // 24h Volume - $900K
+            const contador4 = new ContadorAnimado(
+                document.getElementById('contador4'), 
+                '900K', 
+                1400,
+                'dolares'
+            );
+            contador4.iniciar();
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,53 @@
+<svg width="500" height="400" viewBox="0 0 500 400" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="500" height="400" fill="#000000"/>
+  <rect x="0" y="0" width="500" height="30" fill="#333333"/>
+  <circle cx="15" cy="15" r="6" fill="#ff5f57"/>
+  <circle cx="35" cy="15" r="6" fill="#ffbd2e"/>
+  <circle cx="55" cy="15" r="6" fill="#28ca42"/>
+  <text x="250" y="20" font-family="SF Mono,Monaco,Inconsolata,Roboto Mono,monospace" font-size="12" fill="#ffffff" text-anchor="middle">traditional-token.rs</text>
+  
+  <!-- Code content -->
+  <text x="20" y="60" font-family="SF Mono,Monaco,Inconsolata,Roboto Mono,monospace" font-size="10" fill="#6272a4">   1 │</text>
+  <text x="50" y="60" font-family="SF Mono,Monaco,Inconsolata,Roboto Mono,monospace" font-size="10" fill="#8be9fd">pub</text>
+  <text x="75" y="60" font-family="SF Mono,Monaco,Inconsolata,Roboto Mono,monospace" font-size="10" fill="#ff79c6"> fn</text>
+  <text x="100" y="60" font-family="SF Mono,Monaco,Inconsolata,Roboto Mono,monospace" font-size="10" fill="#50fa7b"> wrap_tokens</text>
+  <text x="180" y="60" font-family="SF Mono,Monaco,Inconsolata,Roboto Mono,monospace" font-size="10" fill="#f8f8f2">() {</text>
+  
+  <text x="20" y="80" font-family="SF Mono,Monaco,Inconsolata,Roboto Mono,monospace" font-size="10" fill="#6272a4">   2 │</text>
+  <text x="60" y="80" font-family="SF Mono,Monaco,Inconsolata,Roboto Mono,monospace" font-size="10" fill="#6272a4">    // Basic 1:1 wrapping</text>
+  
+  <text x="20" y="100" font-family="SF Mono,Monaco,Inconsolata,Roboto Mono,monospace" font-size="10" fill="#6272a4">   3 │</text>
+  <text x="60" y="100" font-family="SF Mono,Monaco,Inconsolata,Roboto Mono,monospace" font-size="10" fill="#8be9fd">    let</text>
+  <text x="90" y="100" font-family="SF Mono,Monaco,Inconsolata,Roboto Mono,monospace" font-size="10" fill="#f8f8f2"> ratio =</text>
+  <text x="150" y="100" font-family="SF Mono,Monaco,Inconsolata,Roboto Mono,monospace" font-size="10" fill="#bd93f9"> 1</text>
+  <text x="160" y="100" font-family="SF Mono,Monaco,Inconsolata,Roboto Mono,monospace" font-size="10" fill="#f8f8f2">;</text>
+  
+  <text x="20" y="120" font-family="SF Mono,Monaco,Inconsolata,Roboto Mono,monospace" font-size="10" fill="#6272a4">   4 │</text>
+  <text x="60" y="120" font-family="SF Mono,Monaco,Inconsolata,Roboto Mono,monospace" font-size="10" fill="#8be9fd">    let</text>
+  <text x="90" y="120" font-family="SF Mono,Monaco,Inconsolata,Roboto Mono,monospace" font-size="10" fill="#f8f8f2"> fee = amount *</text>
+  <text x="190" y="120" font-family="SF Mono,Monaco,Inconsolata,Roboto Mono,monospace" font-size="10" fill="#bd93f9"> 0.05</text>
+  <text x="225" y="120" font-family="SF Mono,Monaco,Inconsolata,Roboto Mono,monospace" font-size="10" fill="#f8f8f2">;</text>
+  
+  <text x="20" y="140" font-family="SF Mono,Monaco,Inconsolata,Roboto Mono,monospace" font-size="10" fill="#6272a4">   5 │</text>
+  <text x="60" y="140" font-family="SF Mono,Monaco,Inconsolata,Roboto Mono,monospace" font-size="10" fill="#50fa7b">    mint</text>
+  <text x="95" y="140" font-family="SF Mono,Monaco,Inconsolata,Roboto Mono,monospace" font-size="10" fill="#f8f8f2">(amount - fee);</text>
+  
+  <text x="20" y="160" font-family="SF Mono,Monaco,Inconsolata,Roboto Mono,monospace" font-size="10" fill="#6272a4">   6 │</text>
+  <text x="50" y="160" font-family="SF Mono,Monaco,Inconsolata,Roboto Mono,monospace" font-size="10" fill="#f8f8f2">}</text>
+  
+  <!-- Separator -->
+  <line x1="10" y1="190" x2="490" y2="190" stroke="#6272a4" stroke-width="1"/>
+  
+  <!-- Limitations section -->
+  <text x="20" y="220" font-family="SF Mono,Monaco,Inconsolata,Roboto Mono,monospace" font-size="14" fill="#ff5555">⚠ LIMITATIONS:</text>
+  <text x="20" y="245" font-family="SF Mono,Monaco,Inconsolata,Roboto Mono,monospace" font-size="12" fill="#ff5555">❌ No price oracles</text>
+  <text x="20" y="265" font-family="SF Mono,Monaco,Inconsolata,Roboto Mono,monospace" font-size="12" fill="#ff5555">❌ Static backing ratio</text>
+  <text x="20" y="285" font-family="SF Mono,Monaco,Inconsolata,Roboto Mono,monospace" font-size="12" fill="#ff5555">❌ No rebalancing</text>
+  <text x="20" y="305" font-family="SF Mono,Monaco,Inconsolata,Roboto Mono,monospace" font-size="12" fill="#ff5555">❌ Manual operations</text>
+  <text x="20" y="325" font-family="SF Mono,Monaco,Inconsolata,Roboto Mono,monospace" font-size="12" fill="#ff5555">❌ No LP rewards</text>
+  <text x="20" y="345" font-family="SF Mono,Monaco,Inconsolata,Roboto Mono,monospace" font-size="12" fill="#ff5555">❌ Basic fee structure</text>
+  
+  <!-- Terminal prompt -->
+  <text x="20" y="380" font-family="SF Mono,Monaco,Inconsolata,Roboto Mono,monospace" font-size="11" fill="#6272a4">user@traditional ~ $</text>
+  <rect x="160" y="370" width="8" height="12" fill="#f8f8f2" opacity="0.8"/>
+</svg>

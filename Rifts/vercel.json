@@ -1,0 +1,72 @@
+{
+  "installCommand": "npm install --legacy-peer-deps --force",
+  "buildCommand": "npm run build",
+  "outputDirectory": ".next",
+  "framework": "nextjs",
+  "env": {
+    "NEXT_TELEMETRY_DISABLED": "1"
+  },
+  "build": {
+    "env": {
+      "NEXT_TELEMETRY_DISABLED": "1",
+      "SKIP_ENV_VALIDATION": "true"
+    }
+  },
+  "crons": [
+    {
+      "path": "/api/rifts-cache",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/detect-pools",
+      "schedule": "* * * * *"
+    },
+    {
+      "path": "/api/arb-lp-sync",
+      "schedule": "*/15 * * * *"
+    },
+    {
+      "path": "/api/lp-earnings-sync",
+      "schedule": "*/15 * * * *"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "X-DNS-Prefetch-Control",
+          "value": "on"
+        },
+        {
+          "key": "Strict-Transport-Security",
+          "value": "max-age=63072000; includeSubDomains; preload"
+        },
+        {
+          "key": "X-Frame-Options",
+          "value": "SAMEORIGIN"
+        },
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "X-XSS-Protection",
+          "value": "1; mode=block"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "origin-when-cross-origin"
+        },
+        {
+          "key": "Permissions-Policy",
+          "value": "camera=(), microphone=(), geolocation=()"
+        },
+        {
+          "key": "Content-Security-Policy",
+          "value": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://fonts.googleapis.com https://cpwebassets.codepen.io https://cdnjs.cloudflare.com http://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://public.codepenassets.com; font-src 'self' https://fonts.gstatic.com https://fonts.googleapis.com https://fonts.reown.com https://secure.walletconnect.org https://secure.walletconnect.com https://*.walletconnect.org https://*.walletconnect.com https://api.web3modal.org https://api.web3modal.com data:; img-src 'self' data: https: http: blob: https://solochain.io https://ipfs.io https://*.ipfs.io https://api.web3modal.org https://api.web3modal.com https://*.walletconnect.org https://*.walletconnect.com; connect-src 'self' http://localhost:3000 http://proxy ws://proxy https://rifts.finance https://app.rifts.finance https://*.rifts.finance https://riftsv2test.vercel.app https://*.vercel.app https://*.solana.com https://*.helius-rpc.com https://*.alchemy.com https://*.jup.ag https://quote-api.jup.ag https://token.jup.ag https://*.coingecko.com https://api.coingecko.com https://*.ankr.com https://*.sonic.game https://ipfs.io https://*.ipfs.io wss://*.solana.com wss://*.helius-rpc.com wss://*.alchemy.com https://*.supabase.co wss://*.supabase.co https://public.codepenassets.com https://cdnjs.cloudflare.com http://cdnjs.cloudflare.com https://api.dexscreener.com https://*.dexscreener.com https://api.web3modal.org https://api.web3modal.com https://rpc.walletconnect.com https://rpc.walletconnect.org https://*.walletconnect.org https://*.walletconnect.com wss://*.walletconnect.org wss://*.walletconnect.com https://relay.walletconnect.org https://relay.walletconnect.com wss://relay.walletconnect.org wss://relay.walletconnect.com https://pulse.walletconnect.com https://pulse.walletconnect.org https://keys.walletconnect.com https://keys.walletconnect.org https://notify.walletconnect.com https://notify.walletconnect.org https://echo.walletconnect.com https://echo.walletconnect.org https://push.walletconnect.com https://push.walletconnect.org wss://www.walletlink.org https://cca-lite.coinbase.com https://*.reown.com https://api.reown.com wss://*.reown.com https://*.solflare.com https://connect.solflare.com wss://*.solflare.com https://*.meteora.ag https://dlmm-api.meteora.ag; frame-src 'self' about: https://secure.walletconnect.org https://secure.walletconnect.com https://verify.walletconnect.org https://verify.walletconnect.com https://secure.reown.com https://verify.reown.com https://*.reown.com https://connect.solflare.com https://*.solflare.com; frame-ancestors 'self'; base-uri 'self'; form-action 'self'"
+        }
+      ]
+    }
+  ]
+}

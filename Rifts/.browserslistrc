@@ -1,0 +1,9 @@
+# Keep the client bundle compatible with older Safari/WebKit (iOS 16 and below).
+# This forces SWC to downlevel features like static class blocks that Safari 16
+# cannot parse, preventing vendor chunk parse errors on iOS 16.
+ios_saf >= 14
+safari >= 14
+last 2 chrome versions
+last 2 firefox versions
+last 2 edge versions
+not dead
