@@ -150,18 +150,40 @@ pub mod rifts_protocol {
                 let _mint = spl_token::state::Mint::unpack(&mint_data)
                     .map_err(|_| ErrorCode::InvalidMint)?;
 
-                // NOTE: Authority checks disabled to allow stablecoins (USDC, USDT, USD1)
-                // These tokens have mint/freeze authorities but are trusted
+                // **ACKNOWLEDGED RISK (Audit MEDIUM #2)**: We intentionally DO NOT validate
+                // mint_authority or freeze_authority on underlying tokens.
+                //
+                // RISKS ACCEPTED:
+                // - Tokens with mint_authority can have supply inflated, diluting vault backing
+                // - Tokens with freeze_authority can have vault funds frozen, causing DoS
+                //
+                // RATIONALE: This allows wrapping popular tokens like USDC, USDT, stSOL, mSOL
+                // which have authorities but are operationally trusted.
+                //
+                // USER RESPONSIBILITY: It is up to the rift creator and users to evaluate
+                // the underlying token's authority risks before wrapping/unwrapping.
+                // The protocol does not enforce authority checks - use at your own risk.
 
-                msg!("✅ SPL Token mint validated");
+                msg!("✅ SPL Token mint validated (authority checks skipped - user accepts risk)");
             } else if *mint_info.owner == spl_token_2022::ID {
                 // Token-2022 mint validation
                 let mint_state =
                     StateWithExtensions::<spl_token_2022::state::Mint>::unpack(&mint_data)
                         .map_err(|_| ErrorCode::InvalidMint)?;
 
-                // NOTE: Authority checks disabled to allow stablecoins
-                // These tokens have mint/freeze authorities but are trusted
+                // **ACKNOWLEDGED RISK (Audit MEDIUM #2)**: We intentionally DO NOT validate
+                // mint_authority or freeze_authority on underlying Token-2022 tokens.
+                //
+                // RISKS ACCEPTED:
+                // - Tokens with mint_authority can have supply inflated, diluting vault backing
+                // - Tokens with freeze_authority can have vault funds frozen, causing DoS
+                //
+                // RATIONALE: This allows wrapping popular tokens which have authorities
+                // but are operationally trusted.
+                //
+                // USER RESPONSIBILITY: It is up to the rift creator and users to evaluate
+                // the underlying token's authority risks before wrapping/unwrapping.
+                // The protocol does not enforce authority checks - use at your own risk.
 
                 // **FIX CRITICAL #31**: Validate Token-2022 extensions (keep these - actually dangerous)
                 let extension_types = mint_state
@@ -211,6 +233,26 @@ pub mod rifts_protocol {
                             // wrap_tokens/unwrap_from_vault/fee_distribution don't include memo CPI
                             // Result: All transfers fail → complete rift DoS (wrap/unwrap/fees all broken)
                             msg!("❌ Underlying mint has MemoTransfer - CPI incompatible!");
+                            return Err(ErrorCode::UnsafeUnderlyingMint.into());
+                        }
+                        ExtensionType::DefaultAccountState => {
+                            // **FIX MEDIUM #6 (Audit)**: BLOCK DefaultAccountState extension
+                            // DefaultAccountState can set new accounts to Frozen by default
+                            // Vault token accounts would be frozen → all transfers fail → complete DoS
+                            msg!("❌ Underlying mint has DefaultAccountState - vault would be frozen!");
+                            return Err(ErrorCode::UnsafeUnderlyingMint.into());
+                        }
+                        ExtensionType::ConfidentialTransferMint => {
+                            // **FIX MEDIUM #6 (Audit)**: BLOCK ConfidentialTransferMint extension
+                            // Confidential transfers require special handling not implemented in wrap/unwrap
+                            // Would cause transfer failures or incorrect balance tracking
+                            msg!("❌ Underlying mint has ConfidentialTransferMint - not supported!");
+                            return Err(ErrorCode::UnsafeUnderlyingMint.into());
+                        }
+                        ExtensionType::ConfidentialTransferFeeConfig => {
+                            // **FIX MEDIUM #6 (Audit)**: BLOCK ConfidentialTransferFeeConfig extension
+                            // Confidential transfer fees require special handling not implemented
+                            msg!("❌ Underlying mint has ConfidentialTransferFeeConfig - not supported!");
                             return Err(ErrorCode::UnsafeUnderlyingMint.into());
                         }
                         _ => {
@@ -845,18 +887,40 @@ pub mod rifts_protocol {
                 let _mint = spl_token::state::Mint::unpack(&mint_data)
                     .map_err(|_| ErrorCode::InvalidMint)?;
 
-                // NOTE: Authority checks disabled to allow stablecoins (USDC, USDT, USD1)
-                // These tokens have mint/freeze authorities but are trusted
+                // **ACKNOWLEDGED RISK (Audit MEDIUM #2)**: We intentionally DO NOT validate
+                // mint_authority or freeze_authority on underlying tokens.
+                //
+                // RISKS ACCEPTED:
+                // - Tokens with mint_authority can have supply inflated, diluting vault backing
+                // - Tokens with freeze_authority can have vault funds frozen, causing DoS
+                //
+                // RATIONALE: This allows wrapping popular tokens like USDC, USDT, stSOL, mSOL
+                // which have authorities but are operationally trusted.
+                //
+                // USER RESPONSIBILITY: It is up to the rift creator and users to evaluate
+                // the underlying token's authority risks before wrapping/unwrapping.
+                // The protocol does not enforce authority checks - use at your own risk.
 
-                msg!("✅ SPL Token mint validated");
+                msg!("✅ SPL Token mint validated (authority checks skipped - user accepts risk)");
             } else if *mint_info.owner == spl_token_2022::ID {
                 // Token-2022 mint validation
                 let mint_state =
                     StateWithExtensions::<spl_token_2022::state::Mint>::unpack(&mint_data)
                         .map_err(|_| ErrorCode::InvalidMint)?;
 
-                // NOTE: Authority checks disabled to allow stablecoins
-                // These tokens have mint/freeze authorities but are trusted
+                // **ACKNOWLEDGED RISK (Audit MEDIUM #2)**: We intentionally DO NOT validate
+                // mint_authority or freeze_authority on underlying Token-2022 tokens.
+                //
+                // RISKS ACCEPTED:
+                // - Tokens with mint_authority can have supply inflated, diluting vault backing
+                // - Tokens with freeze_authority can have vault funds frozen, causing DoS
+                //
+                // RATIONALE: This allows wrapping popular tokens which have authorities
+                // but are operationally trusted.
+                //
+                // USER RESPONSIBILITY: It is up to the rift creator and users to evaluate
+                // the underlying token's authority risks before wrapping/unwrapping.
+                // The protocol does not enforce authority checks - use at your own risk.
 
                 // **FIX CRITICAL #31**: Validate Token-2022 extensions (keep these - actually dangerous)
                 let extension_types = mint_state
@@ -906,6 +970,26 @@ pub mod rifts_protocol {
                             // wrap_tokens/unwrap_from_vault/fee_distribution don't include memo CPI
                             // Result: All transfers fail → complete rift DoS (wrap/unwrap/fees all broken)
                             msg!("❌ Underlying mint has MemoTransfer - CPI incompatible!");
+                            return Err(ErrorCode::UnsafeUnderlyingMint.into());
+                        }
+                        ExtensionType::DefaultAccountState => {
+                            // **FIX MEDIUM #6 (Audit)**: BLOCK DefaultAccountState extension
+                            // DefaultAccountState can set new accounts to Frozen by default
+                            // Vault token accounts would be frozen → all transfers fail → complete DoS
+                            msg!("❌ Underlying mint has DefaultAccountState - vault would be frozen!");
+                            return Err(ErrorCode::UnsafeUnderlyingMint.into());
+                        }
+                        ExtensionType::ConfidentialTransferMint => {
+                            // **FIX MEDIUM #6 (Audit)**: BLOCK ConfidentialTransferMint extension
+                            // Confidential transfers require special handling not implemented in wrap/unwrap
+                            // Would cause transfer failures or incorrect balance tracking
+                            msg!("❌ Underlying mint has ConfidentialTransferMint - not supported!");
+                            return Err(ErrorCode::UnsafeUnderlyingMint.into());
+                        }
+                        ExtensionType::ConfidentialTransferFeeConfig => {
+                            // **FIX MEDIUM #6 (Audit)**: BLOCK ConfidentialTransferFeeConfig extension
+                            // Confidential transfer fees require special handling not implemented
+                            msg!("❌ Underlying mint has ConfidentialTransferFeeConfig - not supported!");
                             return Err(ErrorCode::UnsafeUnderlyingMint.into());
                         }
                         _ => {
@@ -1936,6 +2020,8 @@ pub mod rifts_protocol {
             let rift_key = rift.key();
 
             // **FEE ROUTING**: Transfer wrap fee from vault to fees_vault (only if fees_vault is initialized)
+            // **FIX MEDIUM #5 (Audit)**: Measure actual credited amount for transfer-fee underlyings
+            let actual_fee_credited: u64;
             if wrap_fee > 0 && rift.fees_vault != anchor_lang::solana_program::system_program::ID {
                 // **FIX MEDIUM #23**: Verify fees_vault is actually a valid token account before transferring
                 let fees_vault_info = ctx.accounts.fees_vault.to_account_info();
@@ -1947,6 +2033,9 @@ pub mod rifts_protocol {
                     fees_vault_info.data_len() >= 165, // Minimum token account size
                     ErrorCode::InvalidFeesVault
                 );
+
+                // **FIX MEDIUM #5 (Audit)**: Get pre-transfer balance
+                let fees_vault_balance_before = ctx.accounts.fees_vault.amount;
 
                 let vault_auth_bump = [ctx.bumps.vault_authority];
                 let vault_auth_seeds: &[&[u8]] =
@@ -1964,12 +2053,26 @@ pub mod rifts_protocol {
                     vault_auth_signer,
                 );
                 interface_transfer_checked(fee_transfer_ctx, wrap_fee, underlying_decimals)?;
-                msg!("Wrap fee {} transferred to fees_vault", wrap_fee);
+
+                // **FIX MEDIUM #5 (Audit)**: Measure actual credited amount
+                ctx.accounts.fees_vault.reload()?;
+                let fees_vault_balance_after = ctx.accounts.fees_vault.amount;
+                actual_fee_credited = fees_vault_balance_after
+                    .checked_sub(fees_vault_balance_before)
+                    .ok_or(ErrorCode::MathOverflow)?;
+
+                if actual_fee_credited != wrap_fee {
+                    msg!("⚠️ Transfer fee detected: sent {}, credited {}", wrap_fee, actual_fee_credited);
+                }
+                msg!("Wrap fee {} transferred to fees_vault (credited: {})", wrap_fee, actual_fee_credited);
             } else if wrap_fee > 0 {
+                actual_fee_credited = wrap_fee; // Fee kept in vault, accounted at full value
                 msg!(
                     "Wrap fee {} kept in vault (fees_vault not initialized)",
                     wrap_fee
                 );
+            } else {
+                actual_fee_credited = 0;
             }
 
             // Mint RIFT tokens to user
@@ -2000,10 +2103,11 @@ pub mod rifts_protocol {
                 .ok_or(ErrorCode::MathOverflow)?;
 
             // **FEE ACCOUNTING FIX**: Track wrap fees in total_fees_collected (same as unwrap)
-            if wrap_fee > 0 {
+            // **FIX MEDIUM #5 (Audit)**: Use actual_fee_credited to account for transfer fees
+            if actual_fee_credited > 0 {
                 rift.total_fees_collected = rift
                     .total_fees_collected
-                    .checked_add(wrap_fee)
+                    .checked_add(actual_fee_credited)
                     .ok_or(ErrorCode::MathOverflow)?;
             }
 
@@ -2548,10 +2652,10 @@ pub mod rifts_protocol {
         }
 
         // **HIGH FIX #3**: Max 10% price change from current average (1000 bps)
-        // **FIX CRITICAL #28**: Use allow_stale_fallback=true to enable recovery from oracle deadlock
+        // **FIX CRITICAL #28 + FIX INFO #1 (Audit)**: Use allow_stale_fallback=true to enable recovery
         // When all oracle prices are stale AND backing_ratio is >24h old, this allows manual oracle
         // updates to proceed using the stale backing_ratio as baseline, preventing permanent deadlock
-        let current_avg_price = rift.get_average_oracle_price_with_options(false)?;
+        let current_avg_price = rift.get_average_oracle_price_with_options(true)?;
         if current_avg_price > 0 {
             let price_change = if price > current_avg_price {
                 price
@@ -2887,6 +2991,19 @@ pub mod rifts_protocol {
         require!(
             ctx.accounts.admin_authority_2.key() == admin_2,
             ErrorCode::UnauthorizedAdmin
+        );
+
+        // **FIX HIGH #3**: Bind closed_rift_pubkey to actual rift account
+        // Prevents deriving vault authority from arbitrary pubkeys
+        require!(
+            closed_rift_pubkey == ctx.accounts.rift.key(),
+            ErrorCode::InvalidRift
+        );
+
+        // **FIX HIGH #3**: Verify vault belongs to this rift
+        require!(
+            ctx.accounts.vault.key() == ctx.accounts.rift.vault,
+            ErrorCode::InvalidVault
         );
 
         msg!(
@@ -3357,10 +3474,17 @@ pub mod rifts_protocol {
     }
 
     /// **FIX ISSUE #5**: Execute pending oracle change after 24h delay
-    /// Step 2: Anyone can execute after delay has passed
+    /// **FIX INFO #2 (Audit)**: Only creator can execute (prevents griefing/front-running)
+    /// Step 2: Creator executes after delay has passed
     pub fn execute_oracle_change(ctx: Context<ExecuteOracleChange>) -> Result<()> {
         let rift = &mut ctx.accounts.rift;
         let current_time = Clock::get()?.unix_timestamp;
+
+        // **FIX INFO #2 (Audit)**: Require creator authorization
+        require!(
+            ctx.accounts.creator.key() == rift.creator,
+            ErrorCode::Unauthorized
+        );
 
         // Verify there's a pending change
         require!(
@@ -3426,7 +3550,7 @@ pub mod rifts_protocol {
         ctx: Context<DistributeFeesFromVault>,
         amount: u64,
     ) -> Result<()> {
-        let rift = &ctx.accounts.rift;
+        let rift = &mut ctx.accounts.rift;
 
         // **MANUAL VALIDATION**: Validate underlying_mint (converted to UncheckedAccount to reduce stack usage)
         // 1. Verify owner is Token program (SPL Token or Token-2022)
@@ -3464,20 +3588,39 @@ pub mod rifts_protocol {
                 || ctx.accounts.treasury_account.owner == &spl_token_2022::ID,
             ErrorCode::InvalidProgramId
         );
-        // 2. Deserialize as TokenAccount
+        // 2. Deserialize as TokenAccount and validate owner/mint binding
         // **TOKEN-2022 FIX**: Handle both SPL Token and Token-2022 accounts
+        // **FIX HIGH #1**: Enforce treasury_account.owner == treasury_wallet AND correct mint
         let treasury_data = ctx.accounts.treasury_account.try_borrow_data()?;
         let is_treasury_token_2022 = ctx.accounts.treasury_account.owner == &spl_token_2022::ID;
+        let treasury_token_owner: Pubkey;
+        let treasury_token_mint: Pubkey;
         if is_treasury_token_2022 {
-            spl_token_2022::extension::StateWithExtensions::<spl_token_2022::state::Account>::unpack(&treasury_data)
+            let treasury_token_account = spl_token_2022::extension::StateWithExtensions::<spl_token_2022::state::Account>::unpack(&treasury_data)
                 .map_err(|_| ErrorCode::InvalidTreasuryVault)?;
+            treasury_token_owner = treasury_token_account.base.owner;
+            treasury_token_mint = treasury_token_account.base.mint;
         } else {
-            spl_token::state::Account::unpack(&treasury_data)
+            let treasury_token_account = spl_token::state::Account::unpack(&treasury_data)
                 .map_err(|_| ErrorCode::InvalidTreasuryVault)?;
+            treasury_token_owner = treasury_token_account.owner;
+            treasury_token_mint = treasury_token_account.mint;
         }
         drop(treasury_data);
 
+        // **FIX HIGH #1**: Enforce token account owner matches treasury_wallet
+        require!(
+            treasury_token_owner == rift.treasury_wallet.ok_or(ErrorCode::TreasuryNotSet)?,
+            ErrorCode::InvalidTreasuryVault
+        );
+        // **FIX HIGH #1**: Enforce token account mint matches underlying_mint
+        require!(
+            treasury_token_mint == rift.underlying_mint,
+            ErrorCode::InvalidTreasuryVault
+        );
+
         // **MANUAL VALIDATION**: Validate partner_account if present
+        // **FIX HIGH #1**: Enforce partner_account.owner == partner_wallet AND correct mint
         if ctx.accounts.partner_account.is_some() {
             let partner_account = ctx.accounts.partner_account.as_ref().unwrap();
             // 1. Verify it's owned by token program
@@ -3486,18 +3629,35 @@ pub mod rifts_protocol {
                     || partner_account.owner == &spl_token_2022::ID,
                 ErrorCode::InvalidProgramId
             );
-            // 2. Deserialize as TokenAccount
+            // 2. Deserialize as TokenAccount and validate owner/mint binding
             // **TOKEN-2022 FIX**: Handle both SPL Token and Token-2022 accounts
             let partner_data = partner_account.try_borrow_data()?;
             let is_partner_token_2022 = partner_account.owner == &spl_token_2022::ID;
+            let partner_token_owner: Pubkey;
+            let partner_token_mint: Pubkey;
             if is_partner_token_2022 {
-                spl_token_2022::extension::StateWithExtensions::<spl_token_2022::state::Account>::unpack(&partner_data)
+                let partner_token_account = spl_token_2022::extension::StateWithExtensions::<spl_token_2022::state::Account>::unpack(&partner_data)
                     .map_err(|_| ErrorCode::InvalidPartnerVault)?;
+                partner_token_owner = partner_token_account.base.owner;
+                partner_token_mint = partner_token_account.base.mint;
             } else {
-                spl_token::state::Account::unpack(&partner_data)
+                let partner_token_account = spl_token::state::Account::unpack(&partner_data)
                     .map_err(|_| ErrorCode::InvalidPartnerVault)?;
+                partner_token_owner = partner_token_account.owner;
+                partner_token_mint = partner_token_account.mint;
             }
             drop(partner_data);
+
+            // **FIX HIGH #1**: Enforce token account owner matches partner_wallet
+            require!(
+                partner_token_owner == rift.partner_wallet.ok_or(ErrorCode::PartnerWalletNotSet)?,
+                ErrorCode::InvalidPartnerVault
+            );
+            // **FIX HIGH #1**: Enforce token account mint matches underlying_mint
+            require!(
+                partner_token_mint == rift.underlying_mint,
+                ErrorCode::InvalidPartnerVault
+            );
         }
 
         // **AUTHORIZATION**: Creator, partner, treasury, or PROGRAM_AUTHORITY can distribute fees
@@ -3613,19 +3773,31 @@ pub mod rifts_protocol {
             .checked_sub(fees_vault_balance_after)
             .ok_or(ErrorCode::MathOverflow)?;
 
-        // **FEE-ON-TRANSFER LEAKAGE FIX**: Require exact amount to prevent silent loss
+        // **FIX MEDIUM #3 (Audit)**: Tighten fee tolerance to match max underlying fee (1%)
+        // Previously 95% - now 98% to allow for max 2% total leakage (two 1% transfers)
         // If underlying token has transfer fees, distribution would cause vault debit > recipient credit
         // This creates accounting mismatch and silent loss of funds
         require!(
-            actual_sent >= amount.checked_mul(95).ok_or(ErrorCode::MathOverflow)?.checked_div(100).ok_or(ErrorCode::MathOverflow)?,
+            actual_sent >= amount.checked_mul(98).ok_or(ErrorCode::MathOverflow)?.checked_div(100).ok_or(ErrorCode::MathOverflow)?,
             ErrorCode::ExcessiveTransferFee
         );
+
+        // **FIX MEDIUM #4 (Audit)**: Decrement total_fees_collected after successful distribution
+        // Uses actual_sent (post balance diff) to ensure accurate accounting even with transfer fees
+        rift.total_fees_collected = rift
+            .total_fees_collected
+            .checked_sub(actual_sent)
+            .ok_or(ErrorCode::MathOverflow)?;
 
         msg!(
             "✅ Distributed {} fees (treasury: {}, partner: {})",
             amount,
             treasury_amount,
             partner_amount
+        );
+        msg!(
+            "Updated accounting: total_fees_collected decreased by {}",
+            actual_sent
         );
 
         Ok(())
@@ -3865,14 +4037,46 @@ pub mod rifts_protocol {
         );
 
         // **MANUAL VALIDATION**: Validate treasury_account
+        // **FIX HIGH #2**: Enforce treasury_account.owner == treasury_wallet AND correct mint (rift_mint)
         // Verify it's owned by token program (Token-2022)
         require!(
             ctx.accounts.treasury_account.owner == &anchor_spl::token::ID
                 || ctx.accounts.treasury_account.owner == &spl_token_2022::ID,
             ErrorCode::InvalidProgramId
         );
+        // Deserialize and validate owner/mint binding
+        {
+            let treasury_data = ctx.accounts.treasury_account.try_borrow_data()?;
+            let is_treasury_token_2022 = ctx.accounts.treasury_account.owner == &spl_token_2022::ID;
+            let treasury_token_owner: Pubkey;
+            let treasury_token_mint: Pubkey;
+            if is_treasury_token_2022 {
+                let treasury_token_account = spl_token_2022::extension::StateWithExtensions::<spl_token_2022::state::Account>::unpack(&treasury_data)
+                    .map_err(|_| ErrorCode::InvalidTreasuryVault)?;
+                treasury_token_owner = treasury_token_account.base.owner;
+                treasury_token_mint = treasury_token_account.base.mint;
+            } else {
+                let treasury_token_account = spl_token::state::Account::unpack(&treasury_data)
+                    .map_err(|_| ErrorCode::InvalidTreasuryVault)?;
+                treasury_token_owner = treasury_token_account.owner;
+                treasury_token_mint = treasury_token_account.mint;
+            }
+            drop(treasury_data);
+
+            // **FIX HIGH #2**: Enforce token account owner matches treasury_wallet
+            require!(
+                treasury_token_owner == rift.treasury_wallet.ok_or(ErrorCode::TreasuryNotSet)?,
+                ErrorCode::InvalidTreasuryVault
+            );
+            // **FIX HIGH #2**: Enforce token account mint matches rift_mint (RIFT tokens)
+            require!(
+                treasury_token_mint == rift.rift_mint,
+                ErrorCode::InvalidTreasuryVault
+            );
+        }
 
         // **MANUAL VALIDATION**: Validate partner_account if present
+        // **FIX HIGH #2**: Enforce partner_account.owner == partner_wallet AND correct mint
         if ctx.accounts.partner_account.is_some() {
             let partner_account = ctx.accounts.partner_account.as_ref().unwrap();
             // Verify it's owned by token program (Token-2022)
@@ -3880,6 +4084,34 @@ pub mod rifts_protocol {
                 partner_account.owner == &anchor_spl::token::ID
                     || partner_account.owner == &spl_token_2022::ID,
                 ErrorCode::InvalidProgramId
+            );
+            // Deserialize and validate owner/mint binding
+            let partner_data = partner_account.try_borrow_data()?;
+            let is_partner_token_2022 = partner_account.owner == &spl_token_2022::ID;
+            let partner_token_owner: Pubkey;
+            let partner_token_mint: Pubkey;
+            if is_partner_token_2022 {
+                let partner_token_account = spl_token_2022::extension::StateWithExtensions::<spl_token_2022::state::Account>::unpack(&partner_data)
+                    .map_err(|_| ErrorCode::InvalidPartnerVault)?;
+                partner_token_owner = partner_token_account.base.owner;
+                partner_token_mint = partner_token_account.base.mint;
+            } else {
+                let partner_token_account = spl_token::state::Account::unpack(&partner_data)
+                    .map_err(|_| ErrorCode::InvalidPartnerVault)?;
+                partner_token_owner = partner_token_account.owner;
+                partner_token_mint = partner_token_account.mint;
+            }
+            drop(partner_data);
+
+            // **FIX HIGH #2**: Enforce token account owner matches partner_wallet
+            require!(
+                partner_token_owner == rift.partner_wallet.ok_or(ErrorCode::PartnerWalletNotSet)?,
+                ErrorCode::InvalidPartnerVault
+            );
+            // **FIX HIGH #2**: Enforce token account mint matches rift_mint (RIFT tokens)
+            require!(
+                partner_token_mint == rift.rift_mint,
+                ErrorCode::InvalidPartnerVault
             );
         }
 
@@ -4080,12 +4312,13 @@ pub mod rifts_protocol {
             .checked_add(treasury_received)
             .ok_or(ErrorCode::MathOverflow)?;
 
-        // **FEE-ON-TRANSFER LEAKAGE FIX**: Require exact amount received to prevent silent loss
+        // **FIX MEDIUM #3 (Audit)**: Tighten fee tolerance to match max RIFT transfer fee (1%)
+        // Previously 95% - now 98% to allow for max 2% total leakage (two 1% transfers)
         // RIFT tokens have transfer fees, so recipients get less than sent
         // Allowing this creates accounting mismatch and silent loss in the vault
         // By requiring exact amounts, we force callers to account for fees properly
         require!(
-            total_received >= amount.checked_mul(95).ok_or(ErrorCode::MathOverflow)?.checked_div(100).ok_or(ErrorCode::MathOverflow)?,
+            total_received >= amount.checked_mul(98).ok_or(ErrorCode::MathOverflow)?.checked_div(100).ok_or(ErrorCode::MathOverflow)?,
             ErrorCode::ExcessiveTransferFee
         );
 
@@ -4266,12 +4499,14 @@ pub struct CreateRiftWithVanityPDA<'info> {
     /// Option<Pubkey> = 33 bytes in Borsh (1 discriminant + 32 pubkey), not 32 from std::mem::size_of
     /// 4 Option<Pubkey> fields in current struct
     /// Correct size: 8 (discriminator) + 774 (struct) = 782 bytes
+    /// **FIX LOW #1 (Audit)**: Add constraint to prevent panic from invalid seed_len
     #[account(
         init,
         payer = creator,
         space = 782,
         seeds = [b"rift", underlying_mint.key().as_ref(), creator.key().as_ref(), &vanity_seed[..seed_len as usize]],
         bump,
+        constraint = seed_len <= 32 @ ErrorCode::InvalidVanitySeedLength
     )]
     pub rift: Account<'info, Rift>,
 
@@ -4286,6 +4521,7 @@ pub struct CreateRiftWithVanityPDA<'info> {
     /// MITIGATION: Thoroughly tested initialization sequence, PDA derivation enforced by seeds.
     /// CHECK: Manually initialized with Token-2022 transfer fee extension in instruction handler
     /// **FIX HIGH #4**: Changed from user-provided bump to auto-derived canonical bump
+    /// **FIX LOW #1 (Audit)**: seed_len already validated in rift account constraint
     #[account(
         mut,
         seeds = [b"rift_mint", creator.key().as_ref(), underlying_mint.key().as_ref(), &vanity_seed[..seed_len as usize]],
@@ -5418,10 +5654,17 @@ pub struct ProposeOracleChange<'info> {
     pub rift: Account<'info, Rift>,
 }
 
-/// **FIX ISSUE #5**: Account struct for executing oracle change
+/// **FIX ISSUE #5 + FIX INFO #2 (Audit)**: Account struct for executing oracle change
+/// Only creator can execute to prevent griefing/front-running
 #[derive(Accounts)]
 pub struct ExecuteOracleChange<'info> {
     #[account(mut)]
+    pub creator: Signer<'info>,
+
+    #[account(
+        mut,
+        constraint = rift.creator == creator.key() @ ErrorCode::Unauthorized
+    )]
     pub rift: Account<'info, Rift>,
 }
 
@@ -5637,30 +5880,30 @@ impl Rift {
     pub fn get_average_oracle_price_with_options(&self, allow_stale_fallback: bool) -> Result<u64> {
         let mut total_price = 0u128; // **PRECISION FIX**: Use u128 for intermediate calculations
         let mut count = 0u64;
+        let mut stale_count = 0u64;
 
         // **FIX MEDIUM #7**: Check oracle data freshness to prevent stale price usage
         const MAX_ORACLE_AGE: i64 = 3600; // 1 hour max age
+        // **FIX MEDIUM #1 (Audit)**: Minimum fresh samples required to avoid deadlock
+        const MIN_FRESH_SAMPLES: u64 = 1; // At least 1 fresh sample required
         let current_time = Clock::get()?.unix_timestamp;
 
         for price_data in &self.oracle_prices {
             if price_data.timestamp > 0 {
-                // **FIX MEDIUM #7**: Reject stale oracle data
+                // **FIX MEDIUM #7**: Check oracle data staleness
                 let age = current_time
                     .checked_sub(price_data.timestamp)
                     .ok_or(ErrorCode::MathOverflow)?;
 
-                // **FIX CRITICAL #38**: When allow_stale_fallback=true, skip stale prices instead of failing
-                // This prevents oracle deadlock when all prices are stale but we need to update with new price
+                // **FIX MEDIUM #1 (Audit)**: Skip stale samples in ALL modes, track count
+                // This prevents deadlock when some samples are stale but others are fresh
                 if age > MAX_ORACLE_AGE {
-                    if allow_stale_fallback {
-                        msg!(
-                            "⚠️ Skipping stale oracle price (age: {}s, recovery mode)",
-                            age
-                        );
-                        continue; // Skip this stale price, continue to next
-                    } else {
-                        return Err(ErrorCode::OraclePriceStale.into());
-                    }
+                    stale_count = stale_count.checked_add(1).ok_or(ErrorCode::MathOverflow)?;
+                    msg!(
+                        "⚠️ Skipping stale oracle price (age: {}s)",
+                        age
+                    );
+                    continue; // Skip this stale price, continue to next
                 }
 
                 // **CRITICAL FIX**: Use checked arithmetic to prevent overflow
@@ -5669,6 +5912,14 @@ impl Rift {
                     .ok_or(ErrorCode::MathOverflow)?;
                 count = count.checked_add(1).ok_or(ErrorCode::MathOverflow)?;
             }
+        }
+
+        // **FIX MEDIUM #1 (Audit)**: In normal mode, require minimum fresh samples
+        // In recovery mode (allow_stale_fallback=true), allow fallback to backing_ratio
+        if !allow_stale_fallback && count < MIN_FRESH_SAMPLES && stale_count > 0 {
+            msg!("❌ Insufficient fresh oracle samples: {} fresh, {} stale (min required: {})",
+                count, stale_count, MIN_FRESH_SAMPLES);
+            return Err(ErrorCode::OraclePriceStale.into());
         }
 
         if count > 0 {
@@ -6102,6 +6353,10 @@ pub enum ErrorCode {
     OracleChangeDelayNotMet,
     #[msg("Partner account is required when partner_amount > 0")]
     MissingPartnerAccount,
+    #[msg("Invalid rift - closed_rift_pubkey must match rift account key")]
+    InvalidRift,
+    #[msg("Invalid vanity seed length - seed_len exceeds vanity_seed array bounds")]
+    InvalidVanitySeedLength,
 }
 
 /// **SECURITY FIX #50**: Oracle type enum for event emission
