@@ -14,6 +14,30 @@ const mintDecimalsCache = new Map<string, { decimals: number; timestamp: number 
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
 export async function GET(request: NextRequest) {
+  // SECURITY: Require authentication to prevent DoS via expensive cache warming
+  const { isAuthenticatedForAdminOp } = await import('@/lib/middleware/api-auth');
+
+  const searchParams = request.nextUrl.searchParams;
+  const wallet = searchParams.get('wallet');
+  const cronSecret = request.headers.get('x-cron-secret') || searchParams.get('secret');
+  const authHeader = request.headers.get('authorization');
+
+  const { authenticated, method } = isAuthenticatedForAdminOp({
+    wallet,
+    authHeader,
+    cronSecret,
+  });
+
+  if (!authenticated) {
+    console.log('[WARM-CACHE] Unauthorized access attempt');
+    return NextResponse.json(
+      { error: 'Unauthorized. Admin wallet or valid cron secret required.' },
+      { status: 403 }
+    );
+  }
+
+  console.log(`[WARM-CACHE] Authenticated via: ${method}`);
+
   const startTime = Date.now();
   const warmed: string[] = [];
   const errors: string[] = [];
@@ -203,20 +227,11 @@ export async function GET(request: NextRequest) {
         vaultAccounts.push(vaultPDA.toBase58());
       }
 
-      // Pre-warm the account cache by fetching all vault PDAs
-      const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
-      const warmResponse = await fetch(`${baseUrl}/api/accounts`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ accounts: vaultAccounts })
-      });
-
-      if (warmResponse.ok) {
-        const warmData = await warmResponse.json();
-        console.log(`[WARM-CACHE] ✅ Pre-warmed ${vaultAccounts.length} vault accounts in account cache`);
-      }
+      // Skip pre-warming vault accounts - it causes localhost deadlock during startup
+      // The accounts will be fetched on-demand when needed
+      console.log(`[WARM-CACHE] ✅ Found ${vaultAccounts.length} vault accounts (lazy-loaded on demand)`);
     } catch (err) {
-      console.warn('[WARM-CACHE] ⚠️ Failed to pre-warm account cache (non-critical):', err);
+      console.warn('[WARM-CACHE] Vault discovery failed:', err instanceof Error ? err.message : err);
     }
 
     return NextResponse.json(result);

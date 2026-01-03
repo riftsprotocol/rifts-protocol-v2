@@ -7,9 +7,10 @@ import { NextRequest, NextResponse } from 'next/server';
  * Shows total earned, claimed, and claimable amounts.
  */
 
+import { isAuthenticatedForAdminOp } from '@/lib/middleware/api-auth';
+
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://nitmreqtsnzjylyzwsri.supabase.co';
 const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
-const ADMIN_WALLET = '9KiFDT1jPtATAJktQxQ5nErmmFXbya6kXb6hFasN5pz4';
 
 const getHeaders = () => ({
   'apikey': SUPABASE_ANON_KEY,
@@ -22,10 +23,18 @@ export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
     const wallet = searchParams.get('wallet');
+    const cronSecret = request.headers.get('x-cron-secret') || searchParams.get('secret');
+    const authHeader = request.headers.get('authorization');
 
-    // Only admin can view all earnings
-    if (wallet !== ADMIN_WALLET) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+    // Only admin or cron can view all earnings
+    const { authenticated } = isAuthenticatedForAdminOp({
+      wallet,
+      authHeader,
+      cronSecret,
+    });
+
+    if (!authenticated) {
+      return NextResponse.json({ error: 'Unauthorized - admin access required' }, { status: 403 });
     }
 
     // Fetch lp_earnings, referral_earnings, and referral_claims in parallel

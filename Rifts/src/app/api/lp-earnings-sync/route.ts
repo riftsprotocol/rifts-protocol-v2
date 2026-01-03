@@ -16,10 +16,8 @@ const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://nitmreqtsn
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 
-// Admin wallet for authenticated sync
-const ADMIN_WALLET = '9KiFDT1jPtATAJktQxQ5nErmmFXbya6kXb6hFasN5pz4';
-// Cron secret for Vercel cron jobs
-const CRON_SECRET = process.env.CRON_SECRET || '';
+// Import centralized auth helper
+import { isAuthenticatedForAdminOp, ADMIN_WALLET, isCronSecretValid } from '@/lib/middleware/api-auth';
 
 // LP split rates
 const EXTERNAL_LP_SPLIT = 40; // External LPs always get 40%
@@ -112,24 +110,25 @@ interface LpEarning {
 
 // GET - Sync LP earnings from trades (authenticated: admin wallet or cron secret)
 export async function GET(request: NextRequest) {
-  // Authentication check
+  // SECURITY: Require proper authentication using centralized auth helper
   const searchParams = request.nextUrl.searchParams;
   const wallet = searchParams.get('wallet');
   const cronSecret = request.headers.get('x-cron-secret') || searchParams.get('secret');
-
-  // Allow: admin wallet, valid cron secret, or Vercel cron
   const authHeader = request.headers.get('authorization');
-  const isVercelCron = authHeader === `Bearer ${CRON_SECRET}`;
-  const isValidCronSecret = CRON_SECRET && cronSecret === CRON_SECRET;
-  const isAdmin = wallet === ADMIN_WALLET;
 
-  if (!isAdmin && !isValidCronSecret && !isVercelCron) {
+  const { authenticated, method } = isAuthenticatedForAdminOp({
+    wallet,
+    authHeader,
+    cronSecret,
+  });
+
+  if (!authenticated) {
     console.log('[LP-EARNINGS-SYNC] Unauthorized sync attempt');
-    return NextResponse.json({ error: 'Unauthorized. Provide admin wallet or cron secret.' }, { status: 403 });
+    return NextResponse.json({ error: 'Unauthorized. Provide admin wallet or valid cron secret.' }, { status: 403 });
   }
 
   const startTime = Date.now();
-  console.log(`[LP-EARNINGS-SYNC] Starting sync (auth: ${isAdmin ? 'admin' : isVercelCron ? 'vercel-cron' : 'cron-secret'})...`);
+  console.log(`[LP-EARNINGS-SYNC] Starting sync (auth: ${method})...`);
 
   try {
     // 1. Fetch all successful trades

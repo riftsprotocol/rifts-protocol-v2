@@ -58,30 +58,39 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Wallet required' }, { status: 400 });
     }
 
+    // SECURITY: Validate wallet address format to prevent PostgREST injection
+    const { isValidWalletAddress } = await import('@/lib/middleware/api-auth');
+    if (!isValidWalletAddress(wallet)) {
+      return NextResponse.json({ error: 'Invalid wallet address format' }, { status: 400 });
+    }
+
+    // URL-encode the wallet to prevent injection attacks
+    const encodedWallet = encodeURIComponent(wallet);
+
     // Get referrals where this wallet is the referrer (people they referred)
     const referralsResponse = await fetch(
-      `${SUPABASE_URL}/rest/v1/referrals?referrer_wallet=eq.${wallet}&select=*`,
+      `${SUPABASE_URL}/rest/v1/referrals?referrer_wallet=eq.${encodedWallet}&select=*`,
       { headers: getHeaders(), cache: 'no-store' }
     );
     const referrals = referralsResponse.ok ? await referralsResponse.json() : [];
 
     // Get rifts created by referred users
     const referredRiftsResponse = await fetch(
-      `${SUPABASE_URL}/rest/v1/referred_rifts?referrer_wallet=eq.${wallet}&select=*`,
+      `${SUPABASE_URL}/rest/v1/referred_rifts?referrer_wallet=eq.${encodedWallet}&select=*`,
       { headers: getHeaders(), cache: 'no-store' }
     );
     const referredRifts = referredRiftsResponse.ok ? await referredRiftsResponse.json() : [];
 
     // Get all earnings for this referrer
     const earningsResponse = await fetch(
-      `${SUPABASE_URL}/rest/v1/referral_earnings?referrer_wallet=eq.${wallet}&select=*&order=created_at.desc`,
+      `${SUPABASE_URL}/rest/v1/referral_earnings?referrer_wallet=eq.${encodedWallet}&select=*&order=created_at.desc`,
       { headers: getHeaders(), cache: 'no-store' }
     );
     const earnings = earningsResponse.ok ? await earningsResponse.json() : [];
 
     // Get all claims for this referrer
     const claimsResponse = await fetch(
-      `${SUPABASE_URL}/rest/v1/referral_claims?referrer_wallet=eq.${wallet}&select=*&order=created_at.desc`,
+      `${SUPABASE_URL}/rest/v1/referral_claims?referrer_wallet=eq.${encodedWallet}&select=*&order=created_at.desc`,
       { headers: getHeaders(), cache: 'no-store' }
     );
     const claims = claimsResponse.ok ? await claimsResponse.json() : [];
@@ -95,7 +104,7 @@ export async function GET(request: NextRequest) {
 
     // Check if this wallet was referred by someone
     const wasReferredResponse = await fetch(
-      `${SUPABASE_URL}/rest/v1/referrals?referred_wallet=eq.${wallet}&select=*`,
+      `${SUPABASE_URL}/rest/v1/referrals?referred_wallet=eq.${encodedWallet}&select=*`,
       { headers: getHeaders(), cache: 'no-store' }
     );
     const wasReferred = wasReferredResponse.ok ? await wasReferredResponse.json() : [];
@@ -274,9 +283,18 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'Wallet required' }, { status: 400 });
     }
 
+    // SECURITY: Validate wallet address format to prevent PostgREST injection
+    const { isValidWalletAddress } = await import('@/lib/middleware/api-auth');
+    if (!isValidWalletAddress(wallet)) {
+      return NextResponse.json({ error: 'Invalid wallet address format' }, { status: 400 });
+    }
+
+    // URL-encode the wallet to prevent injection attacks
+    const encodedWallet = encodeURIComponent(wallet);
+
     // Get total earnings
     const earningsResponse = await fetch(
-      `${SUPABASE_URL}/rest/v1/referral_earnings?referrer_wallet=eq.${wallet}&select=amount_sol`,
+      `${SUPABASE_URL}/rest/v1/referral_earnings?referrer_wallet=eq.${encodedWallet}&select=amount_sol`,
       { headers: getHeaders(), cache: 'no-store' }
     );
     const earnings = earningsResponse.ok ? await earningsResponse.json() : [];
@@ -285,7 +303,7 @@ export async function PUT(request: NextRequest) {
 
     // Get total claimed
     const claimsResponse = await fetch(
-      `${SUPABASE_URL}/rest/v1/referral_claims?referrer_wallet=eq.${wallet}&select=amount_sol`,
+      `${SUPABASE_URL}/rest/v1/referral_claims?referrer_wallet=eq.${encodedWallet}&select=amount_sol`,
       { headers: getHeaders(), cache: 'no-store' }
     );
     const claims = claimsResponse.ok ? await claimsResponse.json() : [];

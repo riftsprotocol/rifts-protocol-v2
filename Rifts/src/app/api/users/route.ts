@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { isValidWalletAddress } from '@/lib/middleware/api-auth';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 
 // GET - Get or create user by wallet address
 export async function GET(request: NextRequest) {
@@ -17,6 +18,23 @@ export async function GET(request: NextRequest) {
       return NextResponse.json(
         { error: 'Wallet address required' },
         { status: 400 }
+      );
+    }
+
+    // SECURITY: Validate wallet address format to prevent injection attacks
+    if (!isValidWalletAddress(walletAddress)) {
+      return NextResponse.json(
+        { error: 'Invalid wallet address format' },
+        { status: 400 }
+      );
+    }
+
+    // Check Supabase configuration
+    if (!supabaseUrl || !supabaseServiceKey) {
+      console.error('[USERS-API] Supabase not configured');
+      return NextResponse.json(
+        { error: 'Database not configured' },
+        { status: 500 }
       );
     }
 
@@ -93,12 +111,29 @@ export async function PUT(request: NextRequest) {
       );
     }
 
+    // SECURITY: Validate wallet address format
+    if (!isValidWalletAddress(walletAddress)) {
+      return NextResponse.json(
+        { error: 'Invalid wallet address format' },
+        { status: 400 }
+      );
+    }
+
     // Validate user_id format (alphanumeric, dashes, underscores, 3-30 chars)
     const userIdRegex = /^[a-zA-Z0-9_-]{3,30}$/;
     if (!userIdRegex.test(newUserId)) {
       return NextResponse.json(
         { error: 'User ID must be 3-30 characters (letters, numbers, dashes, underscores only)' },
         { status: 400 }
+      );
+    }
+
+    // Check Supabase configuration
+    if (!supabaseUrl || !supabaseServiceKey) {
+      console.error('[USERS-API] Supabase not configured');
+      return NextResponse.json(
+        { error: 'Database not configured' },
+        { status: 500 }
       );
     }
 

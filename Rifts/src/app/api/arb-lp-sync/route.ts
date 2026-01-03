@@ -1,10 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { isAuthenticatedForAdminOp, ADMIN_WALLET } from '@/lib/middleware/api-auth';
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://nitmreqtsnzjylyzwsri.supabase.co';
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
-const ADMIN_WALLET = '9KiFDT1jPtATAJktQxQ5nErmmFXbya6kXb6hFasN5pz4';
-// Cron secret for Vercel cron jobs
-const CRON_SECRET = process.env.CRON_SECRET || '';
 
 // Dynamic imports for Solana
 const getSolana = async () => {
@@ -291,13 +289,26 @@ async function getDAMMV2Positions(
 // POST - Sync LP positions for all rifts (admin only) or specific rift
 export async function POST(request: NextRequest) {
   try {
+    // SECURITY: Require authentication - no more bypass via missing wallet
+    const { isAuthenticatedForAdminOp } = await import('@/lib/middleware/api-auth');
+
     const body = await request.json();
     const { wallet, riftId } = body;
+    const authHeader = request.headers.get('authorization');
+    const cronSecret = request.headers.get('x-cron-secret');
 
-    // Allow admin or cron job (no wallet = internal call)
-    if (wallet && wallet !== ADMIN_WALLET) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+    const { authenticated, method } = isAuthenticatedForAdminOp({
+      wallet,
+      authHeader,
+      cronSecret,
+    });
+
+    if (!authenticated) {
+      console.log('[LP-SYNC] Unauthorized access attempt');
+      return NextResponse.json({ error: 'Unauthorized. Admin wallet or valid cron secret required.' }, { status: 403 });
     }
+
+    console.log(`[LP-SYNC] Authenticated via: ${method}`);
 
     const { getServerConnection } = await getSolana();
     const connection = await getServerConnection();
@@ -525,18 +536,20 @@ export async function GET(request: NextRequest) {
 
     // If sync=true or called without params (cron), run the sync
     if (sync === 'true' || (!riftId && !searchParams.has('status'))) {
-      // Authentication check for sync operations
+      // Authentication check using centralized auth helper
       const authHeader = request.headers.get('authorization');
-      const isVercelCron = authHeader === `Bearer ${CRON_SECRET}`;
-      const isValidCronSecret = CRON_SECRET && cronSecret === CRON_SECRET;
-      const isAdmin = wallet === ADMIN_WALLET;
+      const { authenticated, method } = isAuthenticatedForAdminOp({
+        wallet,
+        authHeader,
+        cronSecret,
+      });
 
-      if (!isAdmin && !isValidCronSecret && !isVercelCron) {
+      if (!authenticated) {
         console.log('[LP-SYNC] Unauthorized sync attempt');
         return NextResponse.json({ error: 'Unauthorized. Provide admin wallet or cron secret.' }, { status: 403 });
       }
 
-      console.log(`[LP-SYNC] Running scheduled sync (auth: ${isAdmin ? 'admin' : isVercelCron ? 'vercel-cron' : 'cron-secret'})...`);
+      console.log(`[LP-SYNC] Running scheduled sync (auth: ${method})...`);
 
       const { getServerConnection } = await getSolana();
       const connection = await getServerConnection();

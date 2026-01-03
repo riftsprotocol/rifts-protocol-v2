@@ -1053,7 +1053,9 @@ export const LiquidityModal: React.FC<LiquidityModalProps> = ({
         const { Connection, PublicKey } = await import('@solana/web3.js');
         const { CpAmm } = await import('@meteora-ag/cp-amm-sdk');
 
-        const connection = new Connection('https://mainnet.helius-rpc.com/?api-key=05cdb2bf-29b4-436b-afed-f757a4134fe6');
+        // Use the RPC proxy endpoint configured in .env (NEXT_PUBLIC_SOLANA_RPC_URL points to /api/rpc)
+        const rpcEndpoint = process.env.NEXT_PUBLIC_SOLANA_RPC_URL || '/api/rpc';
+        const connection = new Connection(rpcEndpoint);
         const cpAmm = new CpAmm(connection as any);
 
         const WSOL_MINT = 'So11111111111111111111111111111111111111112';
@@ -1779,17 +1781,18 @@ const AddLiquidityContent: React.FC<{
     return () => clearInterval(interval);
   }, []);
 
-  // Fetch live token price from Jupiter/Dexscreener when creating a new pool
+  // Fetch live token price from Jupiter/Dexscreener - ALWAYS fetch when we have a token mint
+  // This ensures auto-pricing works even when no pool exists yet
   useEffect(() => {
     const fetchLiveTokenPrice = async () => {
-      // Only fetch when creating new pool and we have a token mint
-      if (!createNewPool || !selectedRift?.underlyingMint) {
+      // Only need a token mint to fetch price
+      if (!selectedRift?.underlyingMint) {
         setLiveTokenPriceUsd(null);
         return;
       }
 
       try {
-        // For monorifts, fetch the underlying token's price
+        // Fetch the underlying token's price
         const mintToFetch = selectedRift.underlyingMint;
         console.log(`[LIVE-PRICE] Fetching live price for ${mintToFetch}`);
 
@@ -1808,7 +1811,7 @@ const AddLiquidityContent: React.FC<{
     };
 
     fetchLiveTokenPrice();
-  }, [createNewPool, selectedRift?.underlyingMint]);
+  }, [selectedRift?.underlyingMint]);
 
   // Fetch Meteora pool price when pool address is available
   // Use pricePoolType (which correctly identifies the underlying pool type for monorifts)
@@ -2232,28 +2235,35 @@ const AddLiquidityContent: React.FC<{
         // Check if we're adding to an existing pool (not creating new)
         const isAddingToExistingPool = poolExists && !createNewPool;
 
-        // Calculate auto price:
+        // Calculate auto price - ALWAYS use auto-fetched price
         // 1. If adding to existing pool: use actual pool price from Meteora
-        // 2. For new pools: use LIVE price from Jupiter/Dexscreener (like DLMM does)
-        // 3. Fallback: use Meteora pool price or cached USD prices
+        // 2. Use LIVE price from Jupiter/Dexscreener API (always fetched now)
+        // 3. Fallback: use cached USD prices
+        // 4. Last resort: use rift token price if available
         const autoFetchedPrice = (() => {
           // For existing pools: use actual pool price from Meteora
           if (isAddingToExistingPool && meteoraPoolPriceInSol && meteoraPoolPriceInSol > 0) {
             return meteoraPoolPriceInSol;
           }
-          // For new pools: use LIVE price from Jupiter/Dexscreener (same as DLMM)
-          if (createNewPool && liveTokenPriceUsd && liveTokenPriceUsd > 0 && quoteTokenPriceUSD > 0) {
-            const livePrice = liveTokenPriceUsd / quoteTokenPriceUSD;
-            console.log(`[AUTO-PRICE] Using live price: $${liveTokenPriceUsd} / $${quoteTokenPriceUSD} = ${livePrice} SOL`);
+          // Use LIVE price from API (always fetched regardless of createNewPool)
+          // Use quoteTokenPriceUSD if available, otherwise fall back to solPriceUSD
+          const effectiveQuotePrice = quoteTokenPriceUSD > 0 ? quoteTokenPriceUSD : solPriceUSD;
+          if (liveTokenPriceUsd && liveTokenPriceUsd > 0 && effectiveQuotePrice > 0) {
+            const livePrice = liveTokenPriceUsd / effectiveQuotePrice;
+            console.log(`[AUTO-PRICE] Using live price: $${liveTokenPriceUsd} / $${effectiveQuotePrice} = ${livePrice} SOL`);
             return livePrice;
           }
           // Fallback: use Meteora pool price if available
           if (meteoraPoolPriceInSol && meteoraPoolPriceInSol > 0 && liquidityTokenA === 'SOL') {
             return meteoraPoolPriceInSol;
           }
-          // Last fallback: cached USD prices
+          // Fallback: cached USD prices
           if (riftTokenPriceUsd && quoteTokenPriceUSD > 0) {
             return riftTokenPriceUsd / quoteTokenPriceUSD;
+          }
+          // Last resort: use rift token price divided by SOL price
+          if (selectedRift?.riftTokenPrice && selectedRift.riftTokenPrice > 0 && solPriceUSD > 0) {
+            return selectedRift.riftTokenPrice / solPriceUSD;
           }
           return 0;
         })();

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { isAuthenticatedForAdminOp, ADMIN_WALLET, isAdmin } from '@/lib/middleware/api-auth';
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://nitmreqtsnzjylyzwsri.supabase.co';
 
@@ -8,7 +9,7 @@ const getSolana = async () => {
   const { getLaserstreamConnection } = await import('@/lib/solana/server-connection');
   return { Connection, PublicKey, getLaserstreamConnection };
 };
-const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5pdG1yZXF0c256anlseXp3c3JpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI1NjkyNDIsImV4cCI6MjA3ODE0NTI0Mn0.79J6IKGOTVeHGCj4A6oXG-Aj8hOh6vrylwK5rtJ8g9U';
+const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 // Use environment variable for RPC URL - never expose API key in code
 if (!process.env.LASERSTREAM || !process.env.LASERSTREAM_API_KEY) {
   throw new Error('LaserStream not configured (LASERSTREAM + LASERSTREAM_API_KEY required)');
@@ -393,8 +394,7 @@ main().catch(console.error);
 `;
 }
 
-// Admin wallet that can access all rifts and manage team rifts
-const ADMIN_WALLET = '9KiFDT1jPtATAJktQxQ5nErmmFXbya6kXb6hFasN5pz4';
+// ADMIN_WALLET imported from @/lib/middleware/api-auth
 
 // Team rift data with profit split
 interface TeamRiftData {
@@ -518,7 +518,7 @@ export async function GET(request: NextRequest) {
       const teamRifts = await loadTeamRifts();
       return NextResponse.json({
         teamRifts: Array.from(teamRifts.values()),
-        isAdmin: walletAddress === ADMIN_WALLET,
+        isAdmin: isAdmin(walletAddress),
       });
     }
 
@@ -566,8 +566,8 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: 'Rift not found for this address' }, { status: 404 });
       }
 
-      // Check permissions if wallet provided
-      if (walletAddress && walletAddress !== ADMIN_WALLET) {
+      // Check permissions if wallet provided (admin bypasses permission check)
+      if (walletAddress && !isAdmin(walletAddress)) {
         const raw = foundRift.raw_data || {};
         const creator = raw.creator;
         const partnerWallet = raw.partnerWallet;
@@ -657,7 +657,7 @@ export async function GET(request: NextRequest) {
           if (!walletAddress) return true;
 
           // Admin can access all rifts
-          if (walletAddress === ADMIN_WALLET) return true;
+          if (isAdmin(walletAddress)) return true;
 
           // Check if wallet is creator or partner
           const raw = r.raw_data || {};
@@ -705,7 +705,7 @@ export async function GET(request: NextRequest) {
 
       return NextResponse.json({
         rifts,
-        isAdmin: walletAddress === ADMIN_WALLET,
+        isAdmin: isAdmin(walletAddress),
       });
     }
 
@@ -836,12 +836,19 @@ export async function POST(request: NextRequest) {
 export async function PUT(request: NextRequest) {
   try {
     const body = await request.json();
-    const { riftId, isTeamRift, teamSplit, wallet } = body;
+    const { riftId, isTeamRift, teamSplit, wallet, signature, timestamp } = body;
 
-    // Verify admin wallet
-    if (wallet !== ADMIN_WALLET) {
+    // Verify admin authentication (signature-based preferred, legacy wallet check as fallback)
+    const { authenticated, error } = isAuthenticatedForAdminOp({
+      wallet,
+      signature,
+      action: 'manage-team-rifts',
+      timestamp,
+    });
+
+    if (!authenticated) {
       return NextResponse.json(
-        { error: 'Only admin can manage team rifts' },
+        { error: error || 'Only admin can manage team rifts' },
         { status: 403 }
       );
     }

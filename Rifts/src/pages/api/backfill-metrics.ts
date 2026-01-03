@@ -1,6 +1,7 @@
 // Clean up protocol_metrics - remove duplicate/fake data, keep real historical data
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { createClient } from '@supabase/supabase-js';
+import { isAuthenticatedForAdminOp } from '@/lib/middleware/api-auth';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -15,6 +16,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed. Use POST.' });
   }
+
+  // SECURITY: Require authentication for admin maintenance endpoint
+  const wallet = req.query.wallet as string | undefined;
+  const cronSecret = (req.headers['x-cron-secret'] as string) || (req.query.secret as string);
+  const authHeader = req.headers.authorization as string | undefined;
+
+  const { authenticated, method } = isAuthenticatedForAdminOp({
+    wallet,
+    authHeader,
+    cronSecret,
+  });
+
+  if (!authenticated) {
+    console.log('[BACKFILL-METRICS] Unauthorized access attempt');
+    return res.status(403).json({ error: 'Unauthorized. Admin wallet or valid cron secret required.' });
+  }
+
+  console.log(`[BACKFILL-METRICS] Authenticated via: ${method}`);
 
   const action = req.query.action || 'cleanup';
 

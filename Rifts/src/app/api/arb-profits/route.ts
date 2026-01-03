@@ -4,8 +4,8 @@ const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://nitmreqtsn
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 
-// Admin wallet that can manage configs and distribute profits
-const ADMIN_WALLET = '9KiFDT1jPtATAJktQxQ5nErmmFXbya6kXb6hFasN5pz4';
+// Import centralized auth - supports both signature-based and legacy wallet auth
+import { ADMIN_WALLET, isAdmin, verifyAdminAuth, isAuthenticatedForAdminOp } from '@/lib/middleware/api-auth';
 
 // Treasury wallet for profit distribution
 const TREASURY_WALLET = process.env.TREASURY_WALLET || '';
@@ -271,6 +271,15 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Wallet required' }, { status: 400 });
     }
 
+    // SECURITY: Validate wallet address format to prevent PostgREST injection
+    const { isValidWalletAddress } = await import('@/lib/middleware/api-auth');
+    if (!isValidWalletAddress(wallet)) {
+      return NextResponse.json({ error: 'Invalid wallet address format' }, { status: 400 });
+    }
+
+    // URL-encode the wallet to prevent injection attacks
+    const encodedWallet = encodeURIComponent(wallet);
+
     const { PublicKey, LAMPORTS_PER_SOL, getServerConnection } = await getSolana();
     const connection = await getServerConnection();
 
@@ -385,14 +394,14 @@ export async function GET(request: NextRequest) {
     if (action === 'claim-info') {
       // Get LP wallets for this user (dedicated claim wallets)
       const lpWalletsResponse = await fetch(
-        `${SUPABASE_URL}/rest/v1/arb_lp_wallets?lp_address=eq.${wallet}&select=*`,
+        `${SUPABASE_URL}/rest/v1/arb_lp_wallets?lp_address=eq.${encodedWallet}&select=*`,
         { headers: getHeaders(), cache: 'no-store' }
       );
       const lpWallets: LpWallet[] = lpWalletsResponse.ok ? await lpWalletsResponse.json() : [];
 
       // Get LP positions for this wallet (for share % info)
       const lpPositionsResponse = await fetch(
-        `${SUPABASE_URL}/rest/v1/arb_lp_positions?wallet_address=eq.${wallet}&select=*`,
+        `${SUPABASE_URL}/rest/v1/arb_lp_positions?wallet_address=eq.${encodedWallet}&select=*`,
         { headers: getHeaders(), cache: 'no-store' }
       );
       const lpPositions: LpPosition[] = lpPositionsResponse.ok ? await lpPositionsResponse.json() : [];
@@ -531,9 +540,9 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // Admin view
-    if (wallet !== ADMIN_WALLET) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+    // Admin view - require proper authentication
+    if (!isAdmin(wallet)) {
+      return NextResponse.json({ error: 'Unauthorized - admin wallet required' }, { status: 403 });
     }
 
     // Get treasury balance
@@ -615,6 +624,15 @@ export async function PUT(request: NextRequest) {
     if (!wallet || !riftId) {
       return NextResponse.json({ error: 'Wallet and riftId required' }, { status: 400 });
     }
+
+    // SECURITY: Validate wallet address format to prevent PostgREST injection
+    const { isValidWalletAddress } = await import('@/lib/middleware/api-auth');
+    if (!isValidWalletAddress(wallet)) {
+      return NextResponse.json({ error: 'Invalid wallet address format' }, { status: 400 });
+    }
+
+    // URL-encode the wallet to prevent injection attacks
+    const encodedWallet = encodeURIComponent(wallet);
 
     const targetWallet = destinationWallet || wallet;
 
@@ -706,7 +724,7 @@ export async function PUT(request: NextRequest) {
     // Fee rift claim - LP claims from their dedicated wallet
     // Get LP's dedicated wallet
     const lpWalletResponse = await fetch(
-      `${SUPABASE_URL}/rest/v1/arb_lp_wallets?rift_id=eq.${riftId}&lp_address=eq.${wallet}&select=*`,
+      `${SUPABASE_URL}/rest/v1/arb_lp_wallets?rift_id=eq.${riftId}&lp_address=eq.${encodedWallet}&select=*`,
       { headers: getHeaders(), cache: 'no-store' }
     );
     const lpWalletData = lpWalletResponse.ok ? await lpWalletResponse.json() : [];
@@ -748,7 +766,7 @@ export async function PUT(request: NextRequest) {
 
     // Update claimed amount in arb_lp_profits
     const lpProfitResponse = await fetch(
-      `${SUPABASE_URL}/rest/v1/arb_lp_profits?rift_id=eq.${riftId}&wallet_address=eq.${wallet}&select=*`,
+      `${SUPABASE_URL}/rest/v1/arb_lp_profits?rift_id=eq.${riftId}&wallet_address=eq.${encodedWallet}&select=*`,
       { headers: getHeaders(), cache: 'no-store' }
     );
     const lpProfitData = lpProfitResponse.ok ? await lpProfitResponse.json() : [];
@@ -756,7 +774,7 @@ export async function PUT(request: NextRequest) {
     if (lpProfitData.length > 0) {
       const lpProfit = lpProfitData[0];
       await fetch(
-        `${SUPABASE_URL}/rest/v1/arb_lp_profits?rift_id=eq.${riftId}&wallet_address=eq.${wallet}`,
+        `${SUPABASE_URL}/rest/v1/arb_lp_profits?rift_id=eq.${riftId}&wallet_address=eq.${encodedWallet}`,
         {
           method: 'PATCH',
           headers: getHeaders(true),
@@ -788,10 +806,18 @@ export async function PUT(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { wallet, action } = body;
+    const { wallet, action, signature, timestamp } = body;
 
-    if (wallet !== ADMIN_WALLET) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+    // Require admin authentication (signature-based preferred, legacy wallet check as fallback)
+    const authResult = isAuthenticatedForAdminOp({
+      wallet,
+      signature,
+      action,
+      timestamp,
+    });
+
+    if (!authResult.authenticated) {
+      return NextResponse.json({ error: authResult.error || 'Unauthorized' }, { status: 403 });
     }
 
     // Reset all profit data (stats and payments)

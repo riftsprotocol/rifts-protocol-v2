@@ -7,18 +7,28 @@ const getSolana = async () => {
   return { Connection, PublicKey, getLaserstreamConnection };
 };
 
-// Supabase configuration
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://nitmreqtsnzjylyzwsri.supabase.co';
-const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5pdG1yZXF0c256anlseXp3c3JpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI1NjkyNDIsImV4cCI6MjA3ODE0NTI0Mn0.79J6IKGOTVeHGCj4A6oXG-Aj8hOh6vrylwK5rtJ8g9U';
+// Supabase configuration - SECURITY: Never hardcode secrets
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+// Fail fast if Supabase is not configured
+if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
+  console.error('[ARB-BOT] FATAL: Missing required Supabase configuration');
+}
 
 // Supabase fetch helper
 async function supabaseFetch(endpoint: string, options: RequestInit = {}) {
+  // SECURITY: Fail if Supabase is not configured (checked at module load, but double-check here)
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
+    throw new Error('Supabase configuration missing');
+  }
+
   const url = `${SUPABASE_URL}/rest/v1/${endpoint}`;
   const response = await fetch(url, {
     ...options,
     headers: {
-      'apikey': SUPABASE_SERVICE_KEY,
-      'Authorization': `Bearer ${SUPABASE_SERVICE_KEY}`,
+      'apikey': SUPABASE_SERVICE_KEY!,
+      'Authorization': `Bearer ${SUPABASE_SERVICE_KEY!}`,
       'Content-Type': 'application/json',
       'Prefer': options.method === 'POST' ? 'return=representation' : 'return=minimal',
       ...options.headers as Record<string, string>,
@@ -101,6 +111,9 @@ const PUMPSWAP_PROGRAM = 'pAMMBay6oceH9fJKBRHGP5D4bD4sWpmSwMn52FMfXEA';
 
 // Minimum TVL required to run a bot (in USD)
 const MIN_TVL_USD = 100;
+
+// Grace period for newly launched bots before TVL check kicks in (1 hour)
+const NEW_BOT_GRACE_PERIOD_MS = 60 * 60 * 1000;
 
 // Pool data structure
 interface PoolData {
@@ -714,13 +727,18 @@ async function getRiftData(): Promise<any[]> {
   }
 
   // Fetch from Supabase directly instead of internal API
-  const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://nitmreqtsnzjylyzwsri.supabase.co';
-  const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5pdG1yZXF0c256anlseXp3c3JpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI1NjkyNDIsImV4cCI6MjA3ODE0NTI0Mn0.79J6IKGOTVeHGCj4A6oXG-Aj8hOh6vrylwK5rtJ8g9U';
+  // SECURITY: Use environment variables only, no hardcoded fallbacks
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-  const response = await fetch(`${SUPABASE_URL}/rest/v1/rifts?select=*`, {
+  if (!supabaseUrl || !supabaseAnonKey) {
+    throw new Error('Supabase configuration missing');
+  }
+
+  const response = await fetch(`${supabaseUrl}/rest/v1/rifts?select=*`, {
     headers: {
-      'apikey': SUPABASE_ANON_KEY,
-      'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+      'apikey': supabaseAnonKey,
+      'Authorization': `Bearer ${supabaseAnonKey}`,
     },
   });
 
@@ -962,13 +980,14 @@ async function runScanner(botId: string) {
   }
 }
 
-// Admin wallet that can access all rifts
-const ADMIN_WALLET = '9KiFDT1jPtATAJktQxQ5nErmmFXbya6kXb6hFasN5pz4';
+// Import centralized auth - supports both signature-based and legacy wallet auth
+import { ADMIN_WALLET, isAdmin, verifyAdminAuth } from '@/lib/middleware/api-auth';
 
 // Check if wallet has permission to manage a rift
+// For admin actions with signature verification, call verifyAdminAuth() first
 async function checkRiftPermission(walletAddress: string, riftId: string): Promise<{ allowed: boolean; error?: string; rift?: any }> {
   // Admin can do anything
-  if (walletAddress === ADMIN_WALLET) return { allowed: true };
+  if (isAdmin(walletAddress)) return { allowed: true };
 
   // Fetch rift data to check creator/partner
   const rifts = await getRiftData();
@@ -1192,6 +1211,21 @@ async function autoStopLowTvlBots(): Promise<{ stopped: string[], checked: numbe
 
       const tvl = rift.tvl || 0;
       if (tvl < MIN_TVL_USD) {
+        // Skip TVL check entirely for tokens launched via modal
+        if (bot.config?.new_launch === true) {
+          continue;
+        }
+
+        // Check if bot is still within grace period (1 hour after creation)
+        const botCreatedAt = new Date(bot.created_at).getTime();
+        const botAgeMs = Date.now() - botCreatedAt;
+
+        if (botAgeMs < NEW_BOT_GRACE_PERIOD_MS) {
+          const remainingMins = Math.ceil((NEW_BOT_GRACE_PERIOD_MS - botAgeMs) / 60000);
+          console.log(`[ARB-BOT] Skipping TVL check for ${rift.rSymbol}: ${remainingMins}min grace period remaining`);
+          continue;
+        }
+
         console.log(`[ARB-BOT] Auto-stop: ${rift.rSymbol} TVL $${tvl.toFixed(2)} < $${MIN_TVL_USD} minimum`);
 
         // Log the auto-stop
@@ -1235,10 +1269,35 @@ async function autoStopLowTvlBots(): Promise<{ stopped: string[], checked: numbe
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { action, walletAddress, riftId, config } = body;
+    const { action, walletAddress, riftId, config, signature, timestamp } = body;
 
     if (!walletAddress) {
       return NextResponse.json({ error: 'Wallet address required' }, { status: 400 });
+    }
+
+    // SECURITY: If claiming to be admin wallet, require cryptographic signature proof
+    // This prevents impersonation attacks where someone just sends the admin wallet string
+    if (isAdmin(walletAddress)) {
+      if (!signature || !timestamp) {
+        return NextResponse.json({
+          error: 'Admin actions require signature verification. Provide signature and timestamp.'
+        }, { status: 401 });
+      }
+
+      const authResult = verifyAdminAuth({
+        wallet: walletAddress,
+        signature,
+        action: action || 'bot-manage',
+        timestamp,
+      });
+
+      if (!authResult.valid) {
+        return NextResponse.json({
+          error: authResult.error || 'Invalid admin signature'
+        }, { status: 403 });
+      }
+
+      console.log('[ARB-BOT] Admin authenticated via signature verification');
     }
 
     const botId = `${walletAddress}-${riftId}`;
@@ -1248,7 +1307,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Rift ID required' }, { status: 400 });
       }
 
-      // Check wallet permissions
+      // Check wallet permissions (for non-admin: verifies creator/partner ownership)
       const permission = await checkRiftPermission(walletAddress, riftId);
       if (!permission.allowed) {
         return NextResponse.json({ error: permission.error }, { status: 403 });
@@ -1276,15 +1335,20 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Rift not found' }, { status: 404 });
       }
 
-      // Check minimum TVL requirement
+      // Check minimum TVL requirement (skip for newly launched tokens)
       const riftTvl = rift.tvl || 0;
-      if (riftTvl < MIN_TVL_USD) {
+      const skipTvlCheck = body.skipTvlCheck === true;
+      if (!skipTvlCheck && riftTvl < MIN_TVL_USD) {
         return NextResponse.json({
           error: `Cannot start bot: TVL ($${riftTvl.toFixed(2)}) is below minimum $${MIN_TVL_USD} requirement`
         }, { status: 400 });
       }
+      if (skipTvlCheck && riftTvl < MIN_TVL_USD) {
+        console.log(`[ARB-BOT] Skipping TVL check for new launch: ${rift.rSymbol} (TVL: $${riftTvl.toFixed(2)})`);
+      }
 
       // Persist bot config to Supabase for standalone service
+      const isNewLaunch = body.newLaunch === true;
       const botConfig = {
         rift_id: riftId,
         rift_mint: rift.riftMint || '',
@@ -1301,6 +1365,7 @@ export async function POST(request: NextRequest) {
           unwrap_fee_bps: rift.unwrapFeeBps || 30,
           transfer_fee_bps: rift.transferFeeBps || 70,
           auto_trade: config?.autoTrade || false,
+          new_launch: isNewLaunch, // Skip TVL auto-stop for tokens launched via modal
         },
         stats: { scans: 0, opportunities: 0, trades: 0, total_profit: 0 },
       };

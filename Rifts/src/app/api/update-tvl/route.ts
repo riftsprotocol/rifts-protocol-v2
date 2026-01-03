@@ -1,10 +1,32 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerClient } from '@/lib/supabase/server-client';
+import { isAuthenticatedForAdminOp } from '@/lib/middleware/api-auth';
 
 // POST /api/update-tvl
 // Update TVL for a rift (requires service role to bypass RLS)
+// SECURITY: This is an admin-only operation - only authorized wallets can modify TVL
 export async function POST(request: NextRequest) {
   try {
+    // SECURITY: TVL modification is a privileged operation
+    const searchParams = request.nextUrl.searchParams;
+    const wallet = searchParams.get('wallet');
+    const cronSecret = request.headers.get('x-cron-secret') || searchParams.get('secret');
+    const authHeader = request.headers.get('authorization');
+
+    const authResult = isAuthenticatedForAdminOp({
+      wallet,
+      authHeader,
+      cronSecret,
+    });
+
+    if (!authResult.authenticated) {
+      console.log('[UPDATE-TVL] Unauthorized access attempt');
+      return NextResponse.json(
+        { error: authResult.error || 'Unauthorized' },
+        { status: 403 }
+      );
+    }
+
     const body = await request.json();
     const { riftId, tvlDelta, tokenPrice, tokenAmount } = body;
 

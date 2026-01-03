@@ -1031,7 +1031,7 @@ export async function getPerformanceHistory(): Promise<number[]> {
 /**
  * Save rifts to Supabase
  */
-export async function saveRiftsToSupabase(rifts: ProductionRiftData[]): Promise<void> {
+export async function saveRiftsToSupabase(rifts: ProductionRiftData[], wallet?: string): Promise<void> {
   try {
     const records = rifts.map(rift => ({
       id: rift.id,
@@ -1054,14 +1054,17 @@ export async function saveRiftsToSupabase(rifts: ProductionRiftData[]): Promise<
       raw_data: rift
     }));
 
-    const response = await fetch('/api/save-rifts', {
+    // Pass wallet for authentication (API requires admin wallet or cron secret)
+    const url = wallet ? `/api/save-rifts?wallet=${wallet}` : '/api/save-rifts';
+    const response = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ rifts: records })
     });
 
     if (!response.ok) {
-      console.error('[SAVE] Failed to save rifts to Supabase');
+      const errData = await response.json().catch(() => ({}));
+      console.error('[SAVE] Failed to save rifts to Supabase:', errData);
     }
   } catch (error) {
     console.error('[SAVE] Error saving rifts to Supabase:', error);

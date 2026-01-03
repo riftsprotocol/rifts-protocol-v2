@@ -1,12 +1,33 @@
 // Force refresh rifts cache - clears Supabase and forces blockchain refetch
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { isAuthenticatedForAdminOp } from '@/lib/middleware/api-auth';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 export async function POST(request: NextRequest) {
   try {
+    // SECURITY: This is an admin-only operation - clearing the cache can cause disruption
+    const searchParams = request.nextUrl.searchParams;
+    const wallet = searchParams.get('wallet');
+    const cronSecret = request.headers.get('x-cron-secret') || searchParams.get('secret');
+    const authHeader = request.headers.get('authorization');
+
+    const authResult = isAuthenticatedForAdminOp({
+      wallet,
+      authHeader,
+      cronSecret,
+    });
+
+    if (!authResult.authenticated) {
+      console.log('[FORCE-REFRESH] Unauthorized access attempt');
+      return NextResponse.json(
+        { error: authResult.error || 'Unauthorized' },
+        { status: 403 }
+      );
+    }
+
     console.log('[FORCE-REFRESH] Clearing rifts cache and forcing blockchain refetch...');
 
     // Check if Supabase is configured

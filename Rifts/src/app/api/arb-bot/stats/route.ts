@@ -69,12 +69,47 @@ async function supabaseFetchAll(endpoint: string): Promise<any[]> {
   return allRows;
 }
 
+// Rate limiting: Track requests per IP (simple in-memory implementation)
+const requestCounts = new Map<string, { count: number; resetAt: number }>();
+const RATE_LIMIT_WINDOW_MS = 60000; // 1 minute
+const RATE_LIMIT_MAX_REQUESTS = 30; // 30 requests per minute
+
+function checkRateLimit(ip: string): boolean {
+  const now = Date.now();
+  const record = requestCounts.get(ip);
+
+  if (!record || now > record.resetAt) {
+    requestCounts.set(ip, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
+    return true;
+  }
+
+  if (record.count >= RATE_LIMIT_MAX_REQUESTS) {
+    return false;
+  }
+
+  record.count++;
+  return true;
+}
+
 // GET - Fetch aggregated stats and trade history
 export async function GET(request: NextRequest) {
   try {
+    // SECURITY: Basic rate limiting to prevent DoS
+    const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
+               request.headers.get('x-real-ip') ||
+               'unknown';
+
+    if (!checkRateLimit(ip)) {
+      return NextResponse.json(
+        { error: 'Rate limit exceeded. Please try again later.' },
+        { status: 429 }
+      );
+    }
+
     const { searchParams } = new URL(request.url);
     const riftId = searchParams.get('riftId');
-    const limit = parseInt(searchParams.get('limit') || '50');
+    // SECURITY: Cap the limit to prevent excessive data fetching
+    const limit = Math.min(parseInt(searchParams.get('limit') || '50'), 100);
 
     console.log('[ARB-BOT-STATS] Fetching stats', { riftId, limit });
 

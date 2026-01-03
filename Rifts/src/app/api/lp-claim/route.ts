@@ -88,23 +88,32 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Wallet required' }, { status: 400 });
     }
 
+    // SECURITY: Validate wallet address format to prevent PostgREST injection
+    const { isValidWalletAddress } = await import('@/lib/middleware/api-auth');
+    if (!isValidWalletAddress(wallet)) {
+      return NextResponse.json({ error: 'Invalid wallet address format' }, { status: 400 });
+    }
+
+    // URL-encode the wallet to prevent injection attacks
+    const encodedWallet = encodeURIComponent(wallet);
+
     // Fetch LP earnings for this wallet
     const lpEarningsResponse = await fetch(
-      `${SUPABASE_URL}/rest/v1/lp_earnings?wallet_address=eq.${wallet}&select=*`,
+      `${SUPABASE_URL}/rest/v1/lp_earnings?wallet_address=eq.${encodedWallet}&select=*`,
       { headers: getHeaders(), cache: 'no-store' }
     );
     const lpEarnings: LpEarning[] = lpEarningsResponse.ok ? await lpEarningsResponse.json() : [];
 
     // Fetch referral earnings for this wallet
     const referralEarningsResponse = await fetch(
-      `${SUPABASE_URL}/rest/v1/referral_earnings?referrer_wallet=eq.${wallet}&select=*`,
+      `${SUPABASE_URL}/rest/v1/referral_earnings?referrer_wallet=eq.${encodedWallet}&select=*`,
       { headers: getHeaders(), cache: 'no-store' }
     );
     const referralEarnings = referralEarningsResponse.ok ? await referralEarningsResponse.json() : [];
 
     // Fetch referral claims for this wallet
     const referralClaimsResponse = await fetch(
-      `${SUPABASE_URL}/rest/v1/referral_claims?referrer_wallet=eq.${wallet}&select=*`,
+      `${SUPABASE_URL}/rest/v1/referral_claims?referrer_wallet=eq.${encodedWallet}&select=*`,
       { headers: getHeaders(), cache: 'no-store' }
     );
     const referralClaims = referralClaimsResponse.ok ? await referralClaimsResponse.json() : [];
@@ -185,6 +194,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Wallet required' }, { status: 400 });
     }
 
+    // SECURITY: Validate wallet address format to prevent PostgREST injection
+    const { isValidWalletAddress } = await import('@/lib/middleware/api-auth');
+    if (!isValidWalletAddress(wallet)) {
+      return NextResponse.json({ error: 'Invalid wallet address format' }, { status: 400 });
+    }
+
+    // URL-encode the wallet to prevent injection attacks
+    const encodedWallet = encodeURIComponent(wallet);
+
     if (!TREASURY_WALLET || !TREASURY_PRIVATE_KEY) {
       return NextResponse.json({ error: 'Treasury not configured' }, { status: 500 });
     }
@@ -197,7 +215,7 @@ export async function POST(request: NextRequest) {
     if (action === 'claim-referral') {
       // Get referral earnings
       const earningsResponse = await fetch(
-        `${SUPABASE_URL}/rest/v1/referral_earnings?referrer_wallet=eq.${wallet}&select=amount_sol`,
+        `${SUPABASE_URL}/rest/v1/referral_earnings?referrer_wallet=eq.${encodedWallet}&select=amount_sol`,
         { headers: getHeaders(), cache: 'no-store' }
       );
       const earnings = earningsResponse.ok ? await earningsResponse.json() : [];
@@ -208,7 +226,7 @@ export async function POST(request: NextRequest) {
 
       // Get claims
       const claimsResponse = await fetch(
-        `${SUPABASE_URL}/rest/v1/referral_claims?referrer_wallet=eq.${wallet}&select=amount_sol`,
+        `${SUPABASE_URL}/rest/v1/referral_claims?referrer_wallet=eq.${encodedWallet}&select=amount_sol`,
         { headers: getHeaders(), cache: 'no-store' }
       );
       const claims = claimsResponse.ok ? await claimsResponse.json() : [];
@@ -289,7 +307,7 @@ export async function POST(request: NextRequest) {
     // Default: claim LP earnings
     // Fetch LP earnings for this wallet
     const lpEarningsResponse = await fetch(
-      `${SUPABASE_URL}/rest/v1/lp_earnings?wallet_address=eq.${wallet}&select=*`,
+      `${SUPABASE_URL}/rest/v1/lp_earnings?wallet_address=eq.${encodedWallet}&select=*`,
       { headers: getHeaders(), cache: 'no-store' }
     );
     const lpEarnings: LpEarning[] = lpEarningsResponse.ok ? await lpEarningsResponse.json() : [];

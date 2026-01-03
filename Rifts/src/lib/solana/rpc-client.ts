@@ -17,9 +17,8 @@ export class ProxiedConnection extends Connection {
     let wsEndpoint: string | undefined = undefined;
     if (typeof window !== 'undefined') {
       // Use NEXT_PUBLIC_ prefixed env vars for browser access
-      const apiKey =
-        process.env.NEXT_PUBLIC_HELIUS_API_KEY ||
-        '05cdb2bf-29b4-436b-afed-f757a4134fe6'; // Fallback to hardcoded key
+      // SECURITY: Require API key from environment, no hardcoded fallback
+      const apiKey = process.env.NEXT_PUBLIC_HELIUS_API_KEY || process.env.NEXT_PUBLIC_SOLANA_RPC_URL?.match(/api-key=([a-f0-9-]+)/)?.[1];
       if (apiKey) {
         wsEndpoint = `wss://mainnet.helius-rpc.com/?api-key=${apiKey}`;
       }

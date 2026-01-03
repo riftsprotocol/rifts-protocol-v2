@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://nitmreqtsnzjylyzwsri.supabase.co';
-const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5pdG1yZXF0c256anlseXp3c3JpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI1NjkyNDIsImV4cCI6MjA3ODE0NTI0Mn0.79J6IKGOTVeHGCj4A6oXG-Aj8hOh6vrylwK5rtJ8g9U';
+// SECURITY: Require environment variables, no hardcoded fallback
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 
 export async function GET(request: NextRequest) {
   try {

@@ -73,13 +73,22 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Wallet required' }, { status: 400 });
     }
 
+    // SECURITY: Validate wallet address format to prevent PostgREST injection
+    const { isValidWalletAddress } = await import('@/lib/middleware/api-auth');
+    if (!isValidWalletAddress(wallet)) {
+      return NextResponse.json({ error: 'Invalid wallet address format' }, { status: 400 });
+    }
+
+    // URL-encode the wallet to prevent injection attacks
+    const encodedWallet = encodeURIComponent(wallet);
+
     const connection = new Connection(HELIUS_RPC, 'confirmed');
     const claimableItems: ClaimableItem[] = [];
     let totalClaimable = 0;
 
     // 1. Check NEW earnings system - LP earnings from lp_earnings table (synced by lp-earnings-sync)
     const lpEarningsResponse = await fetch(
-      `${SUPABASE_URL}/rest/v1/lp_earnings?wallet_address=eq.${wallet}&select=*`,
+      `${SUPABASE_URL}/rest/v1/lp_earnings?wallet_address=eq.${encodedWallet}&select=*`,
       { headers: getHeaders(), cache: 'no-store' }
     );
     const lpEarningsData = lpEarningsResponse.ok ? await lpEarningsResponse.json() : [];
@@ -100,12 +109,12 @@ export async function GET(request: NextRequest) {
 
     // Also check referral earnings
     const refEarningsResponse = await fetch(
-      `${SUPABASE_URL}/rest/v1/referral_earnings?referrer_wallet=eq.${wallet}&select=amount_sol`,
+      `${SUPABASE_URL}/rest/v1/referral_earnings?referrer_wallet=eq.${encodedWallet}&select=amount_sol`,
       { headers: getHeaders(), cache: 'no-store' }
     );
     const refEarnings = refEarningsResponse.ok ? await refEarningsResponse.json() : [];
     const refClaimsResponse = await fetch(
-      `${SUPABASE_URL}/rest/v1/referral_claims?referrer_wallet=eq.${wallet}&select=amount_sol`,
+      `${SUPABASE_URL}/rest/v1/referral_claims?referrer_wallet=eq.${encodedWallet}&select=amount_sol`,
       { headers: getHeaders(), cache: 'no-store' }
     );
     const refClaims = refClaimsResponse.ok ? await refClaimsResponse.json() : [];
@@ -125,14 +134,14 @@ export async function GET(request: NextRequest) {
 
     // 2a. Check NEW LP positions (arb_lp_positions - the current system)
     const lpPositionsResponse = await fetch(
-      `${SUPABASE_URL}/rest/v1/arb_lp_positions?wallet_address=eq.${wallet}&select=*`,
+      `${SUPABASE_URL}/rest/v1/arb_lp_positions?wallet_address=eq.${encodedWallet}&select=*`,
       { headers: getHeaders(), cache: 'no-store' }
     );
     const arbLpPositions = lpPositionsResponse.ok ? await lpPositionsResponse.json() : [];
 
     // 2b. Check LEGACY LP wallets (backwards compatibility)
     const lpWalletsResponse = await fetch(
-      `${SUPABASE_URL}/rest/v1/lp_wallets?owner_wallet=eq.${wallet}&select=*`,
+      `${SUPABASE_URL}/rest/v1/lp_wallets?owner_wallet=eq.${encodedWallet}&select=*`,
       { headers: getHeaders(), cache: 'no-store' }
     );
     const lpWallets: LegacyWallet[] = lpWalletsResponse.ok ? await lpWalletsResponse.json() : [];
@@ -406,6 +415,9 @@ function releaseLocalLock(wallet: string): void {
 
 // Database-level distributed lock using claim_locks table
 async function acquireDbLock(wallet: string, supabaseUrl: string, headers: Record<string, string>): Promise<boolean> {
+  // URL-encode the wallet for safe use in queries
+  const encodedWallet = encodeURIComponent(wallet);
+
   try {
     // Try to insert a lock record - will fail if one exists
     const response = await fetch(`${supabaseUrl}/rest/v1/claim_locks`, {
@@ -424,7 +436,7 @@ async function acquireDbLock(wallet: string, supabaseUrl: string, headers: Recor
 
     // If insert failed, check if existing lock is expired
     const existingResponse = await fetch(
-      `${supabaseUrl}/rest/v1/claim_locks?wallet=eq.${wallet}&select=*`,
+      `${supabaseUrl}/rest/v1/claim_locks?wallet=eq.${encodedWallet}&select=*`,
       { headers, cache: 'no-store' }
     );
 
@@ -434,7 +446,7 @@ async function acquireDbLock(wallet: string, supabaseUrl: string, headers: Recor
         const expiresAt = new Date(existing[0].expires_at);
         if (expiresAt < new Date()) {
           // Lock expired, delete and try again
-          await fetch(`${supabaseUrl}/rest/v1/claim_locks?wallet=eq.${wallet}`, {
+          await fetch(`${supabaseUrl}/rest/v1/claim_locks?wallet=eq.${encodedWallet}`, {
             method: 'DELETE',
             headers,
           });
@@ -460,8 +472,11 @@ async function acquireDbLock(wallet: string, supabaseUrl: string, headers: Recor
 }
 
 async function releaseDbLock(wallet: string, supabaseUrl: string, headers: Record<string, string>): Promise<void> {
+  // URL-encode the wallet for safe use in queries
+  const encodedWallet = encodeURIComponent(wallet);
+
   try {
-    await fetch(`${supabaseUrl}/rest/v1/claim_locks?wallet=eq.${wallet}`, {
+    await fetch(`${supabaseUrl}/rest/v1/claim_locks?wallet=eq.${encodedWallet}`, {
       method: 'DELETE',
       headers,
     });
@@ -479,6 +494,15 @@ export async function POST(request: NextRequest) {
     if (!wallet) {
       return NextResponse.json({ error: 'Wallet required' }, { status: 400 });
     }
+
+    // SECURITY: Validate wallet address format to prevent PostgREST injection
+    const { isValidWalletAddress } = await import('@/lib/middleware/api-auth');
+    if (!isValidWalletAddress(wallet)) {
+      return NextResponse.json({ error: 'Invalid wallet address format' }, { status: 400 });
+    }
+
+    // URL-encode the wallet to prevent injection attacks
+    const encodedWallet = encodeURIComponent(wallet);
 
     // Acquire local lock (same server)
     if (!acquireLocalLock(wallet)) {
@@ -504,7 +528,7 @@ export async function POST(request: NextRequest) {
 
       // 1. Claim LP earnings from lp_earnings table (synced by lp-earnings-sync)
     const lpEarningsResponse = await fetch(
-      `${SUPABASE_URL}/rest/v1/lp_earnings?wallet_address=eq.${wallet}&select=*`,
+      `${SUPABASE_URL}/rest/v1/lp_earnings?wallet_address=eq.${encodedWallet}&select=*`,
       { headers: getHeaders(), cache: 'no-store' }
     );
     const lpEarningsData = lpEarningsResponse.ok ? await lpEarningsResponse.json() : [];
@@ -519,13 +543,13 @@ export async function POST(request: NextRequest) {
 
     // 2. Claim referral earnings (treasury)
     const refEarningsResponse = await fetch(
-      `${SUPABASE_URL}/rest/v1/referral_earnings?referrer_wallet=eq.${wallet}&select=amount_sol`,
+      `${SUPABASE_URL}/rest/v1/referral_earnings?referrer_wallet=eq.${encodedWallet}&select=amount_sol`,
       { headers: getHeaders(), cache: 'no-store' }
     );
     const refEarnings = refEarningsResponse.ok ? await refEarningsResponse.json() : [];
 
     const refClaimsResponse = await fetch(
-      `${SUPABASE_URL}/rest/v1/referral_claims?referrer_wallet=eq.${wallet}&select=amount_sol`,
+      `${SUPABASE_URL}/rest/v1/referral_claims?referrer_wallet=eq.${encodedWallet}&select=amount_sol`,
       { headers: getHeaders(), cache: 'no-store' }
     );
     const refClaims = refClaimsResponse.ok ? await refClaimsResponse.json() : [];
@@ -672,7 +696,7 @@ export async function POST(request: NextRequest) {
 
     // 3. Claim from LEGACY LP wallets
     const lpWalletsResponse = await fetch(
-      `${SUPABASE_URL}/rest/v1/lp_wallets?owner_wallet=eq.${wallet}&select=*`,
+      `${SUPABASE_URL}/rest/v1/lp_wallets?owner_wallet=eq.${encodedWallet}&select=*`,
       { headers: getHeaders(), cache: 'no-store' }
     );
     const lpWallets: LegacyWallet[] = lpWalletsResponse.ok ? await lpWalletsResponse.json() : [];

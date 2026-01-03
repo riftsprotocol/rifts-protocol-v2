@@ -29,6 +29,30 @@ function getSupabaseAdmin(): SupabaseClient {
 
 export async function POST(request: NextRequest) {
   try {
+    // SECURITY: Require authentication for write operations
+    const { isAuthenticatedForAdminOp } = await import('@/lib/middleware/api-auth');
+
+    const searchParams = request.nextUrl.searchParams;
+    const wallet = searchParams.get('wallet');
+    const cronSecret = request.headers.get('x-cron-secret') || searchParams.get('secret');
+    const authHeader = request.headers.get('authorization');
+
+    const { authenticated, method } = isAuthenticatedForAdminOp({
+      wallet,
+      authHeader,
+      cronSecret,
+    });
+
+    if (!authenticated) {
+      console.log('[UPDATE-RIFT-POOL] Unauthorized access attempt');
+      return NextResponse.json(
+        { error: 'Unauthorized. Admin wallet or valid cron secret required.' },
+        { status: 403 }
+      );
+    }
+
+    console.log(`[UPDATE-RIFT-POOL] Authenticated via: ${method}`);
+
     const body = await request.json();
     const { riftId, poolAddress, poolType, tvl } = body;
 

@@ -2902,9 +2902,10 @@ const RiftsApp: React.FC<RiftsAppProps> = ({ initialRifts }) => {
 
   // 🔥 SERVER-SIDE CACHE WARMER: Pre-fetch all rift data on server for instant wraps!
   useEffect(() => {
-    if (serviceReady && rifts.length > 0) {
-      // Trigger server-side cache warming (fire-and-forget)
-      fetch('/api/warm-cache')
+    if (serviceReady && rifts.length > 0 && wallet.publicKey) {
+      // Trigger server-side cache warming (fire-and-forget) - requires admin wallet
+      const warmUrl = `/api/warm-cache?wallet=${wallet.publicKey}`;
+      fetch(warmUrl)
         .then(res => res.json())
         .then(data => {
           // Cache warmed successfully
@@ -2913,7 +2914,7 @@ const RiftsApp: React.FC<RiftsAppProps> = ({ initialRifts }) => {
           // Silent fail - cache warming is non-critical
         });
     }
-  }, [serviceReady, rifts.length]);
+  }, [serviceReady, rifts.length, wallet.publicKey]);
 
   // 🔥 FETCH 100% REAL ANALYTICS when analytics modal opens (always fetch fresh data)
   useEffect(() => {
@@ -5192,7 +5193,7 @@ const RiftsApp: React.FC<RiftsAppProps> = ({ initialRifts }) => {
           prefixType: newRiftData.prefixType,
           strategy: newRiftData.strategy
         });
-        await saveRiftsToSupabase([newRiftData]);
+        await saveRiftsToSupabase([newRiftData], wallet.publicKey?.toString());
         console.log('[DEBUG-SAVE] ✅ Saved to Supabase, refreshing rifts...');
         // Refresh rifts so the new monorift appears immediately
         await loadRifts(false, true);
@@ -5322,7 +5323,10 @@ const RiftsApp: React.FC<RiftsAppProps> = ({ initialRifts }) => {
       // Save pool address to Supabase so it persists across sessions/browsers
       try {
         console.log('[DEBUG-SAVE] Saving pool address to Supabase...');
-        const updateResponse = await fetch('/api/update-rift-pool', {
+        const updateUrl = wallet.publicKey
+          ? `/api/update-rift-pool?wallet=${wallet.publicKey}`
+          : '/api/update-rift-pool';
+        const updateResponse = await fetch(updateUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
